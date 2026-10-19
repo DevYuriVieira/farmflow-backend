@@ -1,8 +1,8 @@
 package com.farmflow.config;
 
-import com.farmflow.domain.*;
-import com.farmflow.domain.enums.InventoryCategory;
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.entity.*;
+import com.farmflow.enums.InventoryCategory;
+import com.farmflow.enums.TelemetryType;
 import com.farmflow.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +36,6 @@ public class DataInitializer implements CommandLineRunner {
 
         log.info("🌱 Inicializando e semeando o ecossistema FarmFlow...");
 
-        // 1. Usuário Administrador Demo
         User demoUser = User.builder()
             .name("Produtor Yuri")
             .email("admin@farmflow.com")
@@ -45,7 +44,6 @@ public class DataInitializer implements CommandLineRunner {
             .build();
         demoUser = userRepository.save(demoUser);
 
-        // 2. Fazenda Principal
         Farm farm = Farm.builder()
             .name("Fazenda Santa Fé")
             .location("Ribeirão Preto, SP")
@@ -60,7 +58,6 @@ public class DataInitializer implements CommandLineRunner {
         demoUser.setFarmId(farm.getId());
         userRepository.save(demoUser);
 
-        // 3. Talhões
         Plantation talhao1 = Plantation.builder()
             .farmId(farm.getId())
             .name("Talhão Norte 01 - Soja")
@@ -89,7 +86,6 @@ public class DataInitializer implements CommandLineRunner {
             .build();
         talhao2 = plantationRepository.save(talhao2);
 
-        // 4. Atividades
         activityRepository.save(FarmActivity.builder()
             .farmId(farm.getId())
             .plantationId(talhao1.getId())
@@ -114,7 +110,6 @@ public class DataInitializer implements CommandLineRunner {
             .completed(false)
             .build());
 
-        // 5. Telemetria (Silos e Umidade do Solo)
         telemetryRepository.save(TelemetryReading.builder()
             .farmId(farm.getId())
             .sensorId("SILO-GRAOS-01")
@@ -134,7 +129,6 @@ public class DataInitializer implements CommandLineRunner {
             .batteryLevel("85%")
             .build());
 
-        // 6. Inventário de Insumos
         inventoryRepository.save(InventoryItem.builder()
             .farmId(farm.getId())
             .name("Fertilizante NPK 04-14-08")
@@ -157,7 +151,6 @@ public class DataInitializer implements CommandLineRunner {
             .location("Armazém Climatizado 01")
             .build());
 
-        // 7. Maquinário & Frota
         machineryRepository.save(Machinery.builder()
             .farmId(farm.getId())
             .name("Trator John Deere 8R 370")
@@ -180,7 +173,6 @@ public class DataInitializer implements CommandLineRunner {
             .fuelLevelPercent(65.0)
             .build());
 
-        // 8. Registro de Pragas (Scouting)
         pestRecordRepository.save(PestScoutingRecord.builder()
             .farmId(farm.getId())
             .plantationId(talhao1.getId())
@@ -196,3 +188,5 @@ public class DataInitializer implements CommandLineRunner {
         log.info("✅ Dados e módulos agrícolas inicializados! E-mail: admin@farmflow.com | Senha: admin123");
     }
 }
+
+

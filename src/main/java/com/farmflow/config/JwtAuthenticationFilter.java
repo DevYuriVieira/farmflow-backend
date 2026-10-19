@@ -1,6 +1,6 @@
 package com.farmflow.config;
 
-import com.farmflow.domain.User;
+import com.farmflow.entity.User;
 import com.farmflow.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -56,3 +56,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 }
+
+
