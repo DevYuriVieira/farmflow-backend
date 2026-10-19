@@ -1,7 +1,9 @@
-package com.farmflow.common.exception;
+package com.farmflow.exceptions;
 
 public class ResourceNotFoundException extends RuntimeException {
     public ResourceNotFoundException(String message) {
         super(message);
     }
 }
+
+
