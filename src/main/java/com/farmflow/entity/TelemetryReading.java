@@ -13,11 +13,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TelemetryReading {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+public class TelemetryReading extends AuditableEntity {
 
     @Column(nullable = false)
     private String farmId;
@@ -43,5 +39,3 @@ public class TelemetryReading {
     @Column(name = "recorded_at")
     private Instant timestamp = Instant.now();
 }
-
-

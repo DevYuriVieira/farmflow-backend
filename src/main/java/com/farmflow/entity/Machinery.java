@@ -1,9 +1,9 @@
 package com.farmflow.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import lombok.*;
-
-import java.time.Instant;
 
 @Entity
 @Table(name = "machinery")
@@ -12,11 +12,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Machinery {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+public class Machinery extends AuditableEntity {
 
     @Column(nullable = false)
     private String farmId;
@@ -38,9 +34,4 @@ public class Machinery {
     private String nextMaintenanceDate;
 
     private Double fuelLevelPercent;
-
-    @Builder.Default
-    private Instant updatedAt = Instant.now();
 }
-
-

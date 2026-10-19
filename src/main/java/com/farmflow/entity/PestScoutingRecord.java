@@ -1,6 +1,8 @@
 package com.farmflow.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import lombok.*;
 
 import java.time.Instant;
@@ -12,11 +14,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PestScoutingRecord {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+public class PestScoutingRecord extends AuditableEntity {
 
     @Column(nullable = false)
     private String farmId;
@@ -44,5 +42,3 @@ public class PestScoutingRecord {
     @Builder.Default
     private Instant detectedAt = Instant.now();
 }
-
-

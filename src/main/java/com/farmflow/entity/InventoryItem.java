@@ -4,8 +4,6 @@ import com.farmflow.enums.InventoryCategory;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.Instant;
-
 @Entity
 @Table(name = "inventory_items")
 @Getter
@@ -13,11 +11,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class InventoryItem {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+public class InventoryItem extends AuditableEntity {
 
     @Column(nullable = false)
     private String farmId;
@@ -40,9 +34,4 @@ public class InventoryItem {
     private Double unitPrice;
 
     private String location;
-
-    @Builder.Default
-    private Instant updatedAt = Instant.now();
 }
-
-

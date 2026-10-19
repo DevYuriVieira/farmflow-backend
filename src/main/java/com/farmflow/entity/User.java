@@ -1,9 +1,9 @@
 package com.farmflow.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import lombok.*;
-
-import java.time.Instant;
 
 @Entity
 @Table(name = "users")
@@ -12,11 +12,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+public class User extends AuditableEntity {
 
     @Column(nullable = false)
     private String name;
@@ -33,9 +29,4 @@ public class User {
     private String farmId;
 
     private String avatarUrl;
-
-    @Builder.Default
-    private Instant createdAt = Instant.now();
 }
-
-
