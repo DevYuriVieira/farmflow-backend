@@ -1,7 +1,7 @@
 package com.farmflow.service;
 
 import com.farmflow.enums.TelemetryType;
-import com.farmflow.dto.dashboard.DashboardDtos.DashboardStatsResponse;
+import com.farmflow.dto.DashboardDtos.DashboardStatsResponse;
 import com.farmflow.entity.Farm;
 import com.farmflow.entity.TelemetryReading;
 import com.farmflow.repository.*;

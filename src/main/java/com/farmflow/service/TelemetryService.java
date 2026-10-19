@@ -2,7 +2,7 @@ package com.farmflow.service;
 
 import com.farmflow.entity.TelemetryReading;
 import com.farmflow.enums.TelemetryType;
-import com.farmflow.dto.telemetry.TelemetryDtos.CreateTelemetryRequest;
+import com.farmflow.dto.TelemetryDtos.CreateTelemetryRequest;
 import com.farmflow.repository.TelemetryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

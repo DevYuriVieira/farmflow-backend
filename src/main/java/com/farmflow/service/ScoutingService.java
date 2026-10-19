@@ -1,7 +1,7 @@
 package com.farmflow.service;
 
 import com.farmflow.entity.PestScoutingRecord;
-import com.farmflow.dto.scouting.ScoutingDtos.CreatePestRecordRequest;
+import com.farmflow.dto.ScoutingDtos.CreatePestRecordRequest;
 import com.farmflow.repository.PestRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

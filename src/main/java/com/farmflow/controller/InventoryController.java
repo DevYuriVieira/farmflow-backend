@@ -2,7 +2,7 @@ package com.farmflow.controller;
 
 import com.farmflow.entity.InventoryItem;
 import com.farmflow.enums.InventoryCategory;
-import com.farmflow.dto.inventory.InventoryDtos.*;
+import com.farmflow.dto.InventoryDtos.*;
 import com.farmflow.service.InventoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

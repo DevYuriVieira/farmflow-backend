@@ -3,7 +3,7 @@ package com.farmflow.service;
 import com.farmflow.exceptions.ResourceNotFoundException;
 import com.farmflow.entity.InventoryItem;
 import com.farmflow.enums.InventoryCategory;
-import com.farmflow.dto.inventory.InventoryDtos.*;
+import com.farmflow.dto.InventoryDtos.*;
 import com.farmflow.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -1,4 +1,4 @@
-package com.farmflow.dto.telemetry;
+package com.farmflow.dto;
 
 import com.farmflow.enums.TelemetryType;
 import jakarta.validation.constraints.NotBlank;

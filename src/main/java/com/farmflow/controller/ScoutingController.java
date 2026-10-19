@@ -1,7 +1,7 @@
 package com.farmflow.controller;
 
 import com.farmflow.entity.PestScoutingRecord;
-import com.farmflow.dto.scouting.ScoutingDtos.CreatePestRecordRequest;
+import com.farmflow.dto.ScoutingDtos.CreatePestRecordRequest;
 import com.farmflow.service.ScoutingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

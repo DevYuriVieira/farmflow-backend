@@ -1,4 +1,4 @@
-package com.farmflow.dto.inventory;
+package com.farmflow.dto;
 
 import com.farmflow.enums.InventoryCategory;
 import jakarta.validation.constraints.NotBlank;

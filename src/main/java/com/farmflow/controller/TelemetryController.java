@@ -2,7 +2,7 @@ package com.farmflow.controller;
 
 import com.farmflow.entity.TelemetryReading;
 import com.farmflow.enums.TelemetryType;
-import com.farmflow.dto.telemetry.TelemetryDtos.CreateTelemetryRequest;
+import com.farmflow.dto.TelemetryDtos.CreateTelemetryRequest;
 import com.farmflow.service.TelemetryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

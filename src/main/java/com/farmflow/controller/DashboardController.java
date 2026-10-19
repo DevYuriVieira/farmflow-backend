@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.dto.dashboard.DashboardDtos.DashboardStatsResponse;
+import com.farmflow.dto.DashboardDtos.DashboardStatsResponse;
 import com.farmflow.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

@@ -1,4 +1,4 @@
-package com.farmflow.dto.scouting;
+package com.farmflow.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

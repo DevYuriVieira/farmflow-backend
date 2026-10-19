@@ -1,4 +1,4 @@
-package com.farmflow.dto.dashboard;
+package com.farmflow.dto;
 
 public class DashboardDtos {
 

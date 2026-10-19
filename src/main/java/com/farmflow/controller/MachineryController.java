@@ -1,7 +1,7 @@
 package com.farmflow.controller;
 
 import com.farmflow.entity.Machinery;
-import com.farmflow.dto.machinery.MachineryDtos.*;
+import com.farmflow.dto.MachineryDtos.*;
 import com.farmflow.service.MachineryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

@@ -2,7 +2,7 @@ package com.farmflow.service;
 
 import com.farmflow.exceptions.ResourceNotFoundException;
 import com.farmflow.entity.Machinery;
-import com.farmflow.dto.machinery.MachineryDtos.*;
+import com.farmflow.dto.MachineryDtos.*;
 import com.farmflow.repository.MachineryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
