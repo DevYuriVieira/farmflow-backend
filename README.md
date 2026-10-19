@@ -8,12 +8,8 @@ Backend corporativo completo para o ecossistema **FarmFlow**, desenvolvido em **
 
 ```text
 src/main/java/com/farmflow/
-├── common/
-│   └── exception/           # GlobalExceptionHandler, ErrorResponse e Exceções Customizadas
 ├── config/                  # SecurityConfig, JwtTokenProvider, JwtFilter, DataInitializer
 ├── controller/              # RestControllers: Auth, Farm, Plantation, Activity, Telemetry, Inventory, Machinery, Scouting
-├── domain/                  # Entidades JPA (User, Farm, Plantation, FarmActivity, TelemetryReading, InventoryItem, Machinery, PestScoutingRecord)
-│   └── enums/               # UserRole, PlantationStatus, ActivityType, ActivityPriority, TelemetryType, InventoryCategory
 ├── dto/                     # DTOs em Java 21 Records organizados por domínio
 │   ├── activity/
 │   ├── auth/
@@ -23,6 +19,10 @@ src/main/java/com/farmflow/
 │   ├── plantation/
 │   ├── scouting/
 │   └── telemetry/
+├── entity/                  # Entidades JPA (User, Farm, Plantation, FarmActivity, TelemetryReading, InventoryItem, Machinery, PestScoutingRecord)
+│   └── enums/               # UserRole, PlantationStatus, ActivityType, ActivityPriority, TelemetryType, InventoryCategory
+├── exception/               # Exceções de negócio (ResourceNotFoundException, BusinessException)
+├── handlers/                # GlobalExceptionHandler e ErrorResponse
 ├── repository/              # Spring Data JPA Repositories
 └── service/                 # Camada de Regras de Negócio
 ```
