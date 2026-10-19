@@ -39,6 +39,27 @@ public class AuthController {
     public ResponseEntity<Void> logout() {
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/profile")
+    public ResponseEntity<UserResponse> updateProfile(
+        @AuthenticationPrincipal User user,
+        @RequestBody UpdateProfileRequest request
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(authService.updateProfile(user.getId(), request));
+    }
+
+    @PutMapping("/password")
+    public ResponseEntity<Void> changePassword(
+        @AuthenticationPrincipal User user,
+        @Valid @RequestBody ChangePasswordRequest request
+    ) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        authService.changePassword(user.getId(), request);
+        return ResponseEntity.noContent().build();
+    }
 }
-
-
