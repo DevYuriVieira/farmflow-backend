@@ -1,7 +1,7 @@
 package com.farmflow.service;
 
-import com.farmflow.common.exception.ResourceNotFoundException;
-import com.farmflow.domain.Machinery;
+import com.farmflow.exceptions.ResourceNotFoundException;
+import com.farmflow.entity.Machinery;
 import com.farmflow.dto.machinery.MachineryDtos.*;
 import com.farmflow.repository.MachineryRepository;
 import lombok.RequiredArgsConstructor;
@@ -63,3 +63,5 @@ public class MachineryService {
         machineryRepository.delete(machinery);
     }
 }
+
+

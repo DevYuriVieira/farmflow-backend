@@ -1,8 +1,8 @@
 package com.farmflow.service;
 
-import com.farmflow.common.exception.ResourceNotFoundException;
-import com.farmflow.domain.InventoryItem;
-import com.farmflow.domain.enums.InventoryCategory;
+import com.farmflow.exceptions.ResourceNotFoundException;
+import com.farmflow.entity.InventoryItem;
+import com.farmflow.enums.InventoryCategory;
 import com.farmflow.dto.inventory.InventoryDtos.*;
 import com.farmflow.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -64,3 +64,5 @@ public class InventoryService {
         inventoryRepository.delete(item);
     }
 }
+
+

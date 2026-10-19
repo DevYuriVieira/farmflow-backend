@@ -1,7 +1,7 @@
 package com.farmflow.service;
 
-import com.farmflow.domain.TelemetryReading;
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.entity.TelemetryReading;
+import com.farmflow.enums.TelemetryType;
 import com.farmflow.dto.telemetry.TelemetryDtos.CreateTelemetryRequest;
 import com.farmflow.repository.TelemetryRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,3 +40,5 @@ public class TelemetryService {
         return telemetryRepository.save(reading);
     }
 }
+
+

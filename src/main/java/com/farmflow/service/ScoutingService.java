@@ -1,6 +1,6 @@
 package com.farmflow.service;
 
-import com.farmflow.domain.PestScoutingRecord;
+import com.farmflow.entity.PestScoutingRecord;
 import com.farmflow.dto.scouting.ScoutingDtos.CreatePestRecordRequest;
 import com.farmflow.repository.PestRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,3 +38,5 @@ public class ScoutingService {
         return pestRecordRepository.save(record);
     }
 }
+
+

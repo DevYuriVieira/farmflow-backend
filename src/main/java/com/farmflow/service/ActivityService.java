@@ -1,6 +1,6 @@
 package com.farmflow.service;
 
-import com.farmflow.domain.FarmActivity;
+import com.farmflow.entity.FarmActivity;
 import com.farmflow.dto.ActivityDtos.*;
 import com.farmflow.repository.ActivityRepository;
 import lombok.RequiredArgsConstructor;
@@ -82,3 +82,5 @@ public class ActivityService {
         activityRepository.delete(activity);
     }
 }
+
+

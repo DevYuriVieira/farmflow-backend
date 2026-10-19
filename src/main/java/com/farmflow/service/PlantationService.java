@@ -1,6 +1,6 @@
 package com.farmflow.service;
 
-import com.farmflow.domain.Plantation;
+import com.farmflow.entity.Plantation;
 import com.farmflow.dto.PlantationDtos.*;
 import com.farmflow.repository.PlantationRepository;
 import lombok.RequiredArgsConstructor;
@@ -68,3 +68,5 @@ public class PlantationService {
         plantationRepository.delete(plantation);
     }
 }
+
+

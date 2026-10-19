@@ -1,7 +1,7 @@
 package com.farmflow.service;
 
 import com.farmflow.config.JwtTokenProvider;
-import com.farmflow.domain.User;
+import com.farmflow.entity.User;
 import com.farmflow.dto.AuthDtos.*;
 import com.farmflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -65,3 +65,5 @@ public class AuthService {
         );
     }
 }
+
+

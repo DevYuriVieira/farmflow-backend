@@ -1,6 +1,6 @@
 package com.farmflow.service;
 
-import com.farmflow.domain.Farm;
+import com.farmflow.entity.Farm;
 import com.farmflow.dto.FarmDtos.*;
 import com.farmflow.repository.FarmRepository;
 import lombok.RequiredArgsConstructor;
@@ -58,3 +58,5 @@ public class FarmService {
         farmRepository.delete(farm);
     }
 }
+
+
