@@ -1,7 +1,7 @@
 package com.farmflow.repository;
 
-import com.farmflow.domain.TelemetryReading;
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.entity.TelemetryReading;
+import com.farmflow.enums.TelemetryType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,3 +13,5 @@ public interface TelemetryRepository extends JpaRepository<TelemetryReading, Str
     List<TelemetryReading> findByFarmIdAndTypeOrderByTimestampDesc(String farmId, TelemetryType type);
     List<TelemetryReading> findBySensorIdOrderByTimestampDesc(String sensorId);
 }
+
+

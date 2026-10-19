@@ -1,6 +1,6 @@
 package com.farmflow.repository;
 
-import com.farmflow.domain.PestScoutingRecord;
+import com.farmflow.entity.PestScoutingRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -11,3 +11,5 @@ public interface PestRecordRepository extends JpaRepository<PestScoutingRecord, 
     List<PestScoutingRecord> findByFarmIdOrderByDetectedAtDesc(String farmId);
     List<PestScoutingRecord> findByPlantationIdOrderByDetectedAtDesc(String plantationId);
 }
+
+

@@ -1,6 +1,6 @@
 package com.farmflow.repository;
 
-import com.farmflow.domain.Machinery;
+import com.farmflow.entity.Machinery;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -11,3 +11,5 @@ public interface MachineryRepository extends JpaRepository<Machinery, String> {
     List<Machinery> findByFarmId(String farmId);
     List<Machinery> findByFarmIdAndStatus(String farmId, String status);
 }
+
+

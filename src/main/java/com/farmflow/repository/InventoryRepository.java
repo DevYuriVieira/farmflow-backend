@@ -1,7 +1,7 @@
 package com.farmflow.repository;
 
-import com.farmflow.domain.InventoryItem;
-import com.farmflow.domain.enums.InventoryCategory;
+import com.farmflow.entity.InventoryItem;
+import com.farmflow.enums.InventoryCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,3 +12,5 @@ public interface InventoryRepository extends JpaRepository<InventoryItem, String
     List<InventoryItem> findByFarmId(String farmId);
     List<InventoryItem> findByFarmIdAndCategory(String farmId, InventoryCategory category);
 }
+
+
