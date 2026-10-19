@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.FarmActivity;
+import com.farmflow.entity.FarmActivity;
 import com.farmflow.dto.ActivityDtos.*;
 import com.farmflow.service.ActivityService;
 import jakarta.validation.Valid;
@@ -59,3 +59,5 @@ public class ActivityController {
         return ResponseEntity.noContent().build();
     }
 }
+
+

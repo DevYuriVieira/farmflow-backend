@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.User;
+import com.farmflow.entity.User;
 import com.farmflow.dto.AuthDtos.*;
 import com.farmflow.service.AuthService;
 import jakarta.validation.Valid;
@@ -37,7 +37,8 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
-        // Stateless JWT - client discards the token
         return ResponseEntity.noContent().build();
     }
 }
+
+

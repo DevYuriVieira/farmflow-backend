@@ -1,7 +1,7 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.TelemetryReading;
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.entity.TelemetryReading;
+import com.farmflow.enums.TelemetryType;
 import com.farmflow.dto.telemetry.TelemetryDtos.CreateTelemetryRequest;
 import com.farmflow.service.TelemetryService;
 import jakarta.validation.Valid;
@@ -37,3 +37,5 @@ public class TelemetryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(telemetryService.recordReading(request));
     }
 }
+
+

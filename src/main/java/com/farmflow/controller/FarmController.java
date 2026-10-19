@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.Farm;
+import com.farmflow.entity.Farm;
 import com.farmflow.dto.FarmDtos.*;
 import com.farmflow.service.FarmService;
 import jakarta.validation.Valid;
@@ -47,3 +47,5 @@ public class FarmController {
         return ResponseEntity.noContent().build();
     }
 }
+
+

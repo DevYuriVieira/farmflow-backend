@@ -1,7 +1,7 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.InventoryItem;
-import com.farmflow.domain.enums.InventoryCategory;
+import com.farmflow.entity.InventoryItem;
+import com.farmflow.enums.InventoryCategory;
 import com.farmflow.dto.inventory.InventoryDtos.*;
 import com.farmflow.service.InventoryService;
 import jakarta.validation.Valid;
@@ -51,3 +51,5 @@ public class InventoryController {
         return ResponseEntity.noContent().build();
     }
 }
+
+

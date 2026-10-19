@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.PestScoutingRecord;
+import com.farmflow.entity.PestScoutingRecord;
 import com.farmflow.dto.scouting.ScoutingDtos.CreatePestRecordRequest;
 import com.farmflow.service.ScoutingService;
 import jakarta.validation.Valid;
@@ -33,3 +33,5 @@ public class ScoutingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(scoutingService.recordPest(request));
     }
 }
+
+

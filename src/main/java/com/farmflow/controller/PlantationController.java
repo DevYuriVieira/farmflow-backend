@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.Plantation;
+import com.farmflow.entity.Plantation;
 import com.farmflow.dto.PlantationDtos.*;
 import com.farmflow.service.PlantationService;
 import jakarta.validation.Valid;
@@ -50,3 +50,5 @@ public class PlantationController {
         return ResponseEntity.noContent().build();
     }
 }
+
+

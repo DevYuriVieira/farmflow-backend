@@ -1,6 +1,6 @@
 package com.farmflow.controller;
 
-import com.farmflow.domain.Machinery;
+import com.farmflow.entity.Machinery;
 import com.farmflow.dto.machinery.MachineryDtos.*;
 import com.farmflow.service.MachineryService;
 import jakarta.validation.Valid;
@@ -50,3 +50,5 @@ public class MachineryController {
         return ResponseEntity.noContent().build();
     }
 }
+
+
