@@ -1,4 +1,4 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,7 +28,7 @@ public class FarmActivity {
     private String title;
 
     @Column(nullable = false)
-    private String type; // planting, irrigation, spraying, fertilization, harvest, scouting, maintenance, other
+    private String type;
 
     @Column(nullable = false)
     private String date;
@@ -37,7 +37,7 @@ public class FarmActivity {
     private Boolean completed = false;
 
     @Builder.Default
-    private String priority = "medium"; // low, medium, high, urgent
+    private String priority = "medium";
 
     @Column(length = 1000)
     private String notes;
@@ -46,3 +46,5 @@ public class FarmActivity {
 
     private String completedAt;
 }
+
+

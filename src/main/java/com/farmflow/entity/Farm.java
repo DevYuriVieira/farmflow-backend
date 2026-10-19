@@ -1,4 +1,4 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -6,45 +6,37 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "plantations")
+@Table(name = "farms")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Plantation {
+public class Farm {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     @Column(nullable = false)
-    private String farmId;
-
-    @Column(nullable = false)
     private String name;
 
     @Column(nullable = false)
-    private String crop;
-
-    private String variety;
+    private String location;
 
     @Column(nullable = false)
-    private Double areaHectares;
+    private Double totalAreaHectares;
+
+    @Column(nullable = false)
+    private String primaryCrop;
+
+    @Column(nullable = false)
+    private String ownerName;
+
+    private String contactPhone;
 
     @Builder.Default
-    private String status = "planted"; // planning, planted, growing, harvesting, completed, failed
-
-    @Column(nullable = false)
-    private String plantingDate;
-
-    @Column(nullable = false)
-    private String harvestEstimateDate;
-
-    private Double expectedYieldTons;
-
-    @Column(length = 1000)
-    private String notes;
+    private String status = "active";
 
     @Builder.Default
     private Instant createdAt = Instant.now();
@@ -57,3 +49,5 @@ public class Plantation {
         this.updatedAt = Instant.now();
     }
 }
+
+

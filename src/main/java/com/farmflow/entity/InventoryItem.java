@@ -1,6 +1,6 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
-import com.farmflow.domain.enums.InventoryCategory;
+import com.farmflow.enums.InventoryCategory;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -33,7 +33,7 @@ public class InventoryItem {
     private Double quantity;
 
     @Column(name = "unit_measure", nullable = false)
-    private String unit; // kg, L, sacas, un
+    private String unit;
 
     private Double minimumThreshold;
 
@@ -44,3 +44,5 @@ public class InventoryItem {
     @Builder.Default
     private Instant updatedAt = Instant.now();
 }
+
+

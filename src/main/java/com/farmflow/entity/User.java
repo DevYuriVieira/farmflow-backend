@@ -1,4 +1,4 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,7 +28,7 @@ public class User {
     private String password;
 
     @Column(nullable = false)
-    private String role; // owner, manager, agronomist, worker
+    private String role;
 
     private String farmId;
 
@@ -37,3 +37,5 @@ public class User {
     @Builder.Default
     private Instant createdAt = Instant.now();
 }
+
+

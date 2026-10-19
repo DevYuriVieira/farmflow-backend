@@ -1,6 +1,6 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.enums.TelemetryType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -43,3 +43,5 @@ public class TelemetryReading {
     @Column(name = "recorded_at")
     private Instant timestamp = Instant.now();
 }
+
+

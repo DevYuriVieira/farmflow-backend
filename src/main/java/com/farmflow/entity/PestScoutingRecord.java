@@ -1,4 +1,4 @@
-package com.farmflow.domain;
+package com.farmflow.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,7 +28,7 @@ public class PestScoutingRecord {
     private String pestName;
 
     @Column(nullable = false)
-    private String severity; // LOW, MEDIUM, HIGH, CRITICAL
+    private String severity;
 
     private Double confidenceScore;
 
@@ -44,3 +44,5 @@ public class PestScoutingRecord {
     @Builder.Default
     private Instant detectedAt = Instant.now();
 }
+
+
