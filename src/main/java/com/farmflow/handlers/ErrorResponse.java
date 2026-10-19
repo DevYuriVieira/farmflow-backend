@@ -1,4 +1,6 @@
-package com.farmflow.common.exception;
+package com.farmflow.handlers;
+
+import com.farmflow.exceptions.*;
 
 import java.time.Instant;
 import java.util.Map;
@@ -19,3 +21,5 @@ public record ErrorResponse(
         this(Instant.now(), status, error, message, path, validationErrors);
     }
 }
+
+

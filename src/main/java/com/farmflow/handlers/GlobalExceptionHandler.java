@@ -1,4 +1,6 @@
-package com.farmflow.common.exception;
+package com.farmflow.handlers;
+
+import com.farmflow.exceptions.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -76,3 +78,5 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 }
+
+
