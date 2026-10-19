@@ -1,6 +1,6 @@
 package com.farmflow.dto.inventory;
 
-import com.farmflow.domain.enums.InventoryCategory;
+import com.farmflow.enums.InventoryCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -39,3 +39,5 @@ public class InventoryDtos {
         String location
     ) {}
 }
+
+

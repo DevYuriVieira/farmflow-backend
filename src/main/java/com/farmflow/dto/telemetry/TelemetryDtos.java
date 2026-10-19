@@ -1,6 +1,6 @@
 package com.farmflow.dto.telemetry;
 
-import com.farmflow.domain.enums.TelemetryType;
+import com.farmflow.enums.TelemetryType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -27,3 +27,5 @@ public class TelemetryDtos {
         String batteryLevel
     ) {}
 }
+
+

@@ -33,3 +33,5 @@ public class MachineryDtos {
         Double fuelLevelPercent
     ) {}
 }
+
+
