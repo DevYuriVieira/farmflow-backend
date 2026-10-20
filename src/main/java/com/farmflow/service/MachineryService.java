@@ -6,6 +6,7 @@ import com.farmflow.dto.MachineryDtos.*;
 import com.farmflow.repository.MachineryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.List;
 public class MachineryService {
 
     private final MachineryRepository machineryRepository;
+    private final OutboxService outboxService;
 
     public List<Machinery> getMachineryByFarm(String farmId, String status) {
         if (status != null && !status.isBlank()) {
@@ -28,6 +30,7 @@ public class MachineryService {
             .orElseThrow(() -> new ResourceNotFoundException("Máquina/equipamento não encontrado"));
     }
 
+    @Transactional
     public Machinery createMachinery(CreateMachineryRequest request) {
         Machinery machinery = Machinery.builder()
             .farmId(request.farmId())
@@ -40,9 +43,14 @@ public class MachineryService {
             .fuelLevelPercent(request.fuelLevelPercent())
             .build();
 
-        return machineryRepository.save(machinery);
+        Machinery saved = machineryRepository.save(machinery);
+        if ("MAINTENANCE".equalsIgnoreCase(saved.getStatus())) {
+            outboxService.recordEvent("MachineryMaintenanceScheduled", saved);
+        }
+        return saved;
     }
 
+    @Transactional
     public Machinery updateMachinery(String id, UpdateMachineryRequest request) {
         Machinery machinery = getMachineryById(id);
 
@@ -50,7 +58,13 @@ public class MachineryService {
         if (request.model() != null) machinery.setModel(request.model());
         if (request.type() != null) machinery.setType(request.type());
         if (request.operatingHours() != null) machinery.setOperatingHours(request.operatingHours());
-        if (request.status() != null) machinery.setStatus(request.status());
+        if (request.status() != null) {
+            String oldStatus = machinery.getStatus();
+            machinery.setStatus(request.status());
+            if ("MAINTENANCE".equalsIgnoreCase(request.status()) && !"MAINTENANCE".equalsIgnoreCase(oldStatus)) {
+                outboxService.recordEvent("MachineryMaintenanceScheduled", machinery);
+            }
+        }
         if (request.nextMaintenanceDate() != null) machinery.setNextMaintenanceDate(request.nextMaintenanceDate());
         if (request.fuelLevelPercent() != null) machinery.setFuelLevelPercent(request.fuelLevelPercent());
         machinery.setUpdatedAt(Instant.now());
@@ -58,10 +72,9 @@ public class MachineryService {
         return machineryRepository.save(machinery);
     }
 
+    @Transactional
     public void deleteMachinery(String id) {
         Machinery machinery = getMachineryById(id);
         machineryRepository.delete(machinery);
     }
 }
-
-

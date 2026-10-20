@@ -7,6 +7,7 @@ import com.farmflow.repository.PestRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,6 +17,7 @@ public class ScoutingService {
 
     private final PestRecordRepository pestRecordRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final OutboxService outboxService;
 
     public List<PestScoutingRecord> getRecordsByFarm(String farmId) {
         return pestRecordRepository.findByFarmIdOrderByDetectedAtDesc(farmId);
@@ -25,6 +27,7 @@ public class ScoutingService {
         return pestRecordRepository.findByPlantationIdOrderByDetectedAtDesc(plantationId);
     }
 
+    @Transactional
     public PestScoutingRecord recordPest(CreatePestRecordRequest request) {
         PestScoutingRecord record = PestScoutingRecord.builder()
                 .farmId(request.farmId())
@@ -39,7 +42,9 @@ public class ScoutingService {
                 .build();
 
         PestScoutingRecord saved = pestRecordRepository.save(record);
-        eventPublisher.publishEvent(new PestDetectedEvent(saved));
+        PestDetectedEvent event = new PestDetectedEvent(saved);
+        outboxService.recordEvent("PestDetected", event);
+        eventPublisher.publishEvent(event);
         return saved;
     }
 }

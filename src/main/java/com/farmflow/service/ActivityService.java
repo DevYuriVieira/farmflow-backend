@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import com.farmflow.event.ActivityCompletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +24,7 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final OutboxService outboxService;
 
     public List<FarmActivity> getActivities(String plantationId, String farmId, Boolean completed) {
         if (plantationId != null && completed != null) {
@@ -40,6 +42,7 @@ public class ActivityService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Atividade não encontrada"));
     }
 
+    @Transactional
     public FarmActivity createActivity(CreateActivityRequest request) {
         FarmActivity activity = FarmActivity.builder()
             .plantationId(request.plantationId())
@@ -56,6 +59,7 @@ public class ActivityService {
         return activityRepository.save(activity);
     }
 
+    @Transactional
     public FarmActivity updateActivity(String id, UpdateActivityRequest request) {
         FarmActivity activity = getActivityById(id);
 
@@ -76,18 +80,23 @@ public class ActivityService {
 
         FarmActivity saved = activityRepository.save(activity);
         if (Boolean.TRUE.equals(saved.getCompleted())) {
-            eventPublisher.publishEvent(new ActivityCompletedEvent(saved));
+            ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
+            outboxService.recordEvent("ActivityCompleted", event);
+            eventPublisher.publishEvent(event);
         }
         return saved;
     }
 
+    @Transactional
     public FarmActivity toggleStatus(String id, boolean completed) {
         FarmActivity activity = getActivityById(id);
         activity.setCompleted(completed);
         activity.setCompletedAt(completed ? Instant.now().toString() : null);
         FarmActivity saved = activityRepository.save(activity);
         if (completed) {
-            eventPublisher.publishEvent(new ActivityCompletedEvent(saved));
+            ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
+            outboxService.recordEvent("ActivityCompleted", event);
+            eventPublisher.publishEvent(event);
         }
         return saved;
     }
@@ -102,10 +111,9 @@ public class ActivityService {
         return PageResponse.from(activityRepository.findAll(spec, pageable));
     }
 
+    @Transactional
     public void deleteActivity(String id) {
         FarmActivity activity = getActivityById(id);
         activityRepository.delete(activity);
     }
 }
-
-
