@@ -24,6 +24,7 @@ class OutboxServiceTest {
     private ObjectMapper objectMapper;
     private OutboxService outboxService;
     private ApplicationEventPublisher eventPublisher;
+    private RabbitMqEventPublisher rabbitMqEventPublisher;
     private OutboxProcessor outboxProcessor;
 
     @BeforeEach
@@ -32,7 +33,8 @@ class OutboxServiceTest {
         objectMapper = new ObjectMapper();
         outboxService = new OutboxService(outboxRepository, objectMapper);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        outboxProcessor = new OutboxProcessor(outboxService, eventPublisher);
+        rabbitMqEventPublisher = mock(RabbitMqEventPublisher.class);
+        outboxProcessor = new OutboxProcessor(outboxService, eventPublisher, rabbitMqEventPublisher);
 
         MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID_KEY, "trace-abc-123");
     }
@@ -99,6 +101,7 @@ class OutboxServiceTest {
                 .id("msg-batch-1")
                 .eventType("PestDetectedEvent")
                 .payload("{\"pest\":\"Lagarta\"}")
+                .traceParent("trace-1")
                 .occurredOn(Instant.now())
                 .build();
         when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
@@ -107,6 +110,7 @@ class OutboxServiceTest {
         outboxProcessor.processOutboxMessages();
 
         verify(eventPublisher, times(1)).publishEvent(msg);
+        verify(rabbitMqEventPublisher, times(1)).publish("pest.detected.warning", msg.getPayload(), "trace-1");
         assertNotNull(msg.getProcessedOn());
     }
 
@@ -116,12 +120,14 @@ class OutboxServiceTest {
                 .id("msg-fail-1")
                 .eventType("PestDetectedEvent")
                 .payload("{\"pest\":\"Lagarta\"}")
+                .traceParent("trace-fail")
                 .occurredOn(Instant.now())
                 .attempts(0)
                 .build();
         when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
         when(outboxRepository.findById("msg-fail-1")).thenReturn(Optional.of(msg));
-        doThrow(new RuntimeException("Broker connection refused")).when(eventPublisher).publishEvent(msg);
+        doThrow(new RuntimeException("Broker connection refused"))
+                .when(rabbitMqEventPublisher).publish(anyString(), any(), anyString());
 
         outboxProcessor.processOutboxMessages();
 
