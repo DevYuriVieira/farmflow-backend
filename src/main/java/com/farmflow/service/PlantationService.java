@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import com.farmflow.dto.PageResponse;
+import com.farmflow.specification.PlantationSpecification;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @RequiredArgsConstructor
@@ -61,6 +65,15 @@ public class PlantationService {
         if (request.notes() != null) plantation.setNotes(request.notes());
 
         return plantationRepository.save(plantation);
+    }
+
+    public PageResponse<Plantation> getPlantationsPaged(String farmId, String status, String crop, Pageable pageable) {
+        Specification<Plantation> spec = Specification.allOf(
+            PlantationSpecification.hasFarmId(farmId),
+            PlantationSpecification.hasStatus(status),
+            PlantationSpecification.hasCrop(crop)
+        );
+        return PageResponse.from(plantationRepository.findAll(spec, pageable));
     }
 
     public void deletePlantation(String id) {

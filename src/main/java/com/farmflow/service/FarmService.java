@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import com.farmflow.dto.PageResponse;
+import com.farmflow.specification.FarmSpecification;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +55,15 @@ public class FarmService {
         if (request.status() != null) farm.setStatus(request.status());
 
         return farmRepository.save(farm);
+    }
+
+    public PageResponse<Farm> getFarmsPaged(String name, String location, String status, Pageable pageable) {
+        Specification<Farm> spec = Specification.allOf(
+            FarmSpecification.nameContains(name),
+            FarmSpecification.locationContains(location),
+            FarmSpecification.hasStatus(status)
+        );
+        return PageResponse.from(farmRepository.findAll(spec, pageable));
     }
 
     public void deleteFarm(String id) {

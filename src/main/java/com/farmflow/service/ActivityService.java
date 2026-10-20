@@ -10,6 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import com.farmflow.dto.PageResponse;
+import com.farmflow.specification.ActivitySpecification;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import com.farmflow.event.ActivityCompletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -86,6 +90,16 @@ public class ActivityService {
             eventPublisher.publishEvent(new ActivityCompletedEvent(saved));
         }
         return saved;
+    }
+
+    public PageResponse<FarmActivity> getActivitiesPaged(String farmId, String plantationId, String type, Boolean completed, Pageable pageable) {
+        Specification<FarmActivity> spec = Specification.allOf(
+            ActivitySpecification.hasFarmId(farmId),
+            ActivitySpecification.hasPlantationId(plantationId),
+            ActivitySpecification.hasType(type),
+            ActivitySpecification.isCompleted(completed)
+        );
+        return PageResponse.from(activityRepository.findAll(spec, pageable));
     }
 
     public void deleteActivity(String id) {

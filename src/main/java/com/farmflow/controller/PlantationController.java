@@ -10,6 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.farmflow.dto.PageResponse;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/plantations")
@@ -17,6 +21,16 @@ import java.util.List;
 public class PlantationController {
 
     private final PlantationService plantationService;
+
+    @GetMapping("/paged")
+    public ResponseEntity<PageResponse<Plantation>> getPlantationsPaged(
+        @RequestParam(required = false) String farmId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String crop,
+        @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        return ResponseEntity.ok(plantationService.getPlantationsPaged(farmId, status, crop, pageable));
+    }
 
     @GetMapping
     public ResponseEntity<List<Plantation>> getPlantations(
