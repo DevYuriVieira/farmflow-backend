@@ -19,7 +19,8 @@ public class OutboxProcessor {
     private static final int BATCH_SIZE = 20;
 
     private final OutboxService outboxService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ApplicationEventPublisher localEventPublisher;
+    private final RabbitMqEventPublisher rabbitMqEventPublisher;
 
     @Scheduled(fixedDelayString = "${farmflow.outbox.interval-ms:2000}")
     public void processOutboxMessages() {
@@ -30,12 +31,30 @@ public class OutboxProcessor {
 
         for (OutboxMessage message : messages) {
             try {
-                eventPublisher.publishEvent(message);
+                localEventPublisher.publishEvent(message);
+                String routingKey = resolveRoutingKey(message.getEventType());
+                rabbitMqEventPublisher.publish(routingKey, message.getPayload(), message.getTraceParent());
                 outboxService.markProcessed(message.getId());
             } catch (Exception e) {
                 log.error("Failed to process outbox message id={}", message.getId(), e);
                 outboxService.markFailed(message.getId(), e.getMessage());
             }
         }
+    }
+
+    private String resolveRoutingKey(String eventType) {
+        if (eventType == null) {
+            return "events.general";
+        }
+        if (eventType.contains("Telemetry")) {
+            return "telemetry.alert.critical";
+        }
+        if (eventType.contains("Pest")) {
+            return "pest.detected.warning";
+        }
+        if (eventType.contains("Machinery")) {
+            return "machinery.maintenance.scheduled";
+        }
+        return "events.general";
     }
 }
