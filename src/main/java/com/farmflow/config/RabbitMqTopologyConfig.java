@@ -1,0 +1,143 @@
+package com.farmflow.config;
+
+import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration
+public class RabbitMqTopologyConfig {
+
+    public static final String MAIN_EXCHANGE = "farmflow.events";
+    public static final String DLX_EXCHANGE = "farmflow.events.dlx";
+
+    public static final String TELEMETRY_ALERTS_QUEUE = "farmflow.telemetry.alerts";
+    public static final String PEST_DETECTED_QUEUE = "farmflow.pest.detected";
+    public static final String MACHINERY_MAINTENANCE_QUEUE = "farmflow.machinery.maintenance";
+
+    public static final String RETRY_10S_QUEUE = "farmflow.events.retry.10s";
+    public static final String RETRY_30S_QUEUE = "farmflow.events.retry.30s";
+    public static final String RETRY_90S_QUEUE = "farmflow.events.retry.90s";
+    public static final String DLQ_QUEUE = "farmflow.events.dlq";
+
+    public static final String ROUTING_TELEMETRY = "telemetry.alert.#";
+    public static final String ROUTING_PEST = "pest.detected.#";
+    public static final String ROUTING_MACHINERY = "machinery.maintenance.#";
+
+    @Bean
+    public TopicExchange mainExchange() {
+        return new TopicExchange(MAIN_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public DirectExchange dlxExchange() {
+        return new DirectExchange(DLX_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue telemetryAlertsQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "telemetry.alerts.retry.10s");
+        return new Queue(TELEMETRY_ALERTS_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue pestDetectedQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "pest.detected.retry.10s");
+        return new Queue(PEST_DETECTED_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue machineryMaintenanceQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "machinery.maintenance.retry.10s");
+        return new Queue(MACHINERY_MAINTENANCE_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue retry10sQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-message-ttl", 10000);
+        args.put("x-dead-letter-exchange", MAIN_EXCHANGE);
+        return new Queue(RETRY_10S_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue retry30sQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-message-ttl", 30000);
+        args.put("x-dead-letter-exchange", MAIN_EXCHANGE);
+        return new Queue(RETRY_30S_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue retry90sQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-message-ttl", 90000);
+        args.put("x-dead-letter-exchange", MAIN_EXCHANGE);
+        return new Queue(RETRY_90S_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue dlqQueue() {
+        return new Queue(DLQ_QUEUE, true, false, false);
+    }
+
+    @Bean
+    public Binding telemetryBinding(Queue telemetryAlertsQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(telemetryAlertsQueue).to(mainExchange).with(ROUTING_TELEMETRY);
+    }
+
+    @Bean
+    public Binding pestBinding(Queue pestDetectedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(pestDetectedQueue).to(mainExchange).with(ROUTING_PEST);
+    }
+
+    @Bean
+    public Binding machineryBinding(Queue machineryMaintenanceQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(machineryMaintenanceQueue).to(mainExchange).with(ROUTING_MACHINERY);
+    }
+
+    @Bean
+    public Binding retry10sBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("telemetry.alerts.retry.10s");
+    }
+
+    @Bean
+    public Binding retry30sBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("telemetry.alerts.retry.30s");
+    }
+
+    @Bean
+    public Binding retry90sBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("telemetry.alerts.retry.90s");
+    }
+
+    @Bean
+    public Binding dlqBinding(Queue dlqQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(dlqQueue).to(dlxExchange).with("events.dlq");
+    }
+
+    @Bean
+    public MessageConverter jsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
+
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter jsonMessageConverter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(jsonMessageConverter);
+        template.setMandatory(true);
+        return template;
+    }
+}
