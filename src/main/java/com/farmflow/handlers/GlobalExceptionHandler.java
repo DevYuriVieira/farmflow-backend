@@ -1,82 +1,114 @@
 package com.farmflow.handlers;
 
-import com.farmflow.exceptions.*;
-
+import com.farmflow.config.CorrelationIdFilter;
+import com.farmflow.exceptions.BusinessException;
+import com.farmflow.exceptions.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.ProblemDetail;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final URI DEFAULT_TYPE = URI.create("https://tools.ietf.org/html/rfc9457");
+
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
-        var error = new ErrorResponse(
-            HttpStatus.NOT_FOUND.value(),
-            "Not Found",
-            ex.getMessage(),
-            request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Not Found");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
     }
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest request) {
-        var error = new ErrorResponse(
-            HttpStatus.BAD_REQUEST.value(),
-            "Business Rule Violation",
-            ex.getMessage(),
-            request.getRequestURI()
+    public ProblemDetail handleBusiness(BusinessException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Business Rule Violation");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "A database integrity constraint violation or duplicate record conflict occurred."
         );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Conflict");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
-        var error = new ErrorResponse(
-            ex.getStatusCode().value(),
-            ex.getReason() != null ? ex.getReason() : "Error",
-            ex.getMessage(),
-            request.getRequestURI()
+    public ProblemDetail handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                ex.getStatusCode(),
+                ex.getReason() != null ? ex.getReason() : "Request processing error"
         );
-        return ResponseEntity.status(ex.getStatusCode()).body(error);
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle(ex.getStatusCode().toString());
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         Map<String, String> errors = new HashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             errors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
-        var error = new ErrorResponse(
-            HttpStatus.UNPROCESSABLE_ENTITY.value(),
-            "Validation Failed",
-            "Erros de validação nos campos informados",
-            request.getRequestURI(),
-            errors
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                "Validation failed for one or more fields."
         );
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error);
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Validation Failed");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("invalidParams", errors);
+        enrichProblemDetail(problem);
+        return problem;
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
-        var error = new ErrorResponse(
-            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Internal Server Error",
-            ex.getMessage() != null ? ex.getMessage() : "Ocorreu um erro interno inesperado",
-            request.getRequestURI()
+    public ProblemDetail handleGeneric(Exception ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "An unexpected internal error occurred. Please contact support referencing the traceId."
         );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Internal Server Error");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    private void enrichProblemDetail(ProblemDetail problem) {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        problem.setProperty("traceId", correlationId);
+        problem.setProperty("timestamp", Instant.now());
     }
 }
-
-
