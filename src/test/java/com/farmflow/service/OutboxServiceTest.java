@@ -25,6 +25,7 @@ class OutboxServiceTest {
     private OutboxService outboxService;
     private ApplicationEventPublisher eventPublisher;
     private RabbitMqEventPublisher rabbitMqEventPublisher;
+    private com.farmflow.config.FarmFlowMetrics farmFlowMetrics;
     private OutboxProcessor outboxProcessor;
 
     @BeforeEach
@@ -34,7 +35,8 @@ class OutboxServiceTest {
         outboxService = new OutboxService(outboxRepository, objectMapper);
         eventPublisher = mock(ApplicationEventPublisher.class);
         rabbitMqEventPublisher = mock(RabbitMqEventPublisher.class);
-        outboxProcessor = new OutboxProcessor(outboxService, eventPublisher, rabbitMqEventPublisher);
+        farmFlowMetrics = mock(com.farmflow.config.FarmFlowMetrics.class);
+        outboxProcessor = new OutboxProcessor(outboxService, eventPublisher, rabbitMqEventPublisher, farmFlowMetrics);
 
         MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID_KEY, "trace-abc-123");
     }

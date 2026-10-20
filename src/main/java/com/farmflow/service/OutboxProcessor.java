@@ -1,5 +1,6 @@
 package com.farmflow.service;
 
+import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.entity.OutboxMessage;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ public class OutboxProcessor {
     private final OutboxService outboxService;
     private final ApplicationEventPublisher localEventPublisher;
     private final RabbitMqEventPublisher rabbitMqEventPublisher;
+    private final FarmFlowMetrics farmFlowMetrics;
 
     @Scheduled(fixedDelayString = "${farmflow.outbox.interval-ms:2000}")
     public void processOutboxMessages() {
@@ -35,9 +37,11 @@ public class OutboxProcessor {
                 String routingKey = resolveRoutingKey(message.getEventType());
                 rabbitMqEventPublisher.publish(routingKey, message.getPayload(), message.getTraceParent());
                 outboxService.markProcessed(message.getId());
+                farmFlowMetrics.incrementOutboxPublished();
             } catch (Exception e) {
                 log.error("Failed to process outbox message id={}", message.getId(), e);
                 outboxService.markFailed(message.getId(), e.getMessage());
+                farmFlowMetrics.incrementOutboxFailed();
             }
         }
     }

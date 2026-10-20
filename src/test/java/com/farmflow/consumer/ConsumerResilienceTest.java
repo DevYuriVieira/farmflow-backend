@@ -16,6 +16,7 @@ class ConsumerResilienceTest {
 
     private MessageDeduplicationService deduplicationService;
     private RabbitTemplate rabbitTemplate;
+    private com.farmflow.config.FarmFlowMetrics farmFlowMetrics;
     private TelemetryAlertConsumer telemetryConsumer;
     private PestScoutingConsumer pestConsumer;
 
@@ -23,8 +24,9 @@ class ConsumerResilienceTest {
     void setUp() {
         deduplicationService = mock(MessageDeduplicationService.class);
         rabbitTemplate = mock(RabbitTemplate.class);
-        telemetryConsumer = new TelemetryAlertConsumer(deduplicationService, rabbitTemplate);
-        pestConsumer = new PestScoutingConsumer(deduplicationService, rabbitTemplate);
+        farmFlowMetrics = mock(com.farmflow.config.FarmFlowMetrics.class);
+        telemetryConsumer = new TelemetryAlertConsumer(deduplicationService, rabbitTemplate, farmFlowMetrics);
+        pestConsumer = new PestScoutingConsumer(deduplicationService, rabbitTemplate, farmFlowMetrics);
     }
 
     @Test

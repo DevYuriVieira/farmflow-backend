@@ -1,5 +1,6 @@
 package com.farmflow.consumer;
 
+import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
 import com.farmflow.service.MessageDeduplicationService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class PestScoutingConsumer {
 
     private final MessageDeduplicationService deduplicationService;
     private final RabbitTemplate rabbitTemplate;
+    private final FarmFlowMetrics farmFlowMetrics;
 
     @RabbitListener(queues = RabbitMqTopologyConfig.PEST_DETECTED_QUEUE)
     public void handlePestDetected(Message message) {
@@ -29,6 +31,7 @@ public class PestScoutingConsumer {
         if (payload.isBlank() || !payload.startsWith("{")) {
             log.error("Poison message detected in pest detected queue: id={}. Routing to DLQ.", messageId);
             routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
+            farmFlowMetrics.incrementConsumerFailed("PestDetected");
             return;
         }
 
@@ -38,6 +41,7 @@ public class PestScoutingConsumer {
             return;
         }
 
+        farmFlowMetrics.incrementConsumerProcessed("PestDetected");
         log.info("Successfully processed pest detected alert: messageId={} payload={}", messageId, payload);
     }
 

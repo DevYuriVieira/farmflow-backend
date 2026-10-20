@@ -1,5 +1,6 @@
 package com.farmflow.consumer;
 
+import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
 import com.farmflow.service.MessageDeduplicationService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class TelemetryAlertConsumer {
 
     private final MessageDeduplicationService deduplicationService;
     private final RabbitTemplate rabbitTemplate;
+    private final FarmFlowMetrics farmFlowMetrics;
 
     @RabbitListener(queues = RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE)
     public void handleTelemetryAlert(Message message) {
@@ -29,6 +31,7 @@ public class TelemetryAlertConsumer {
         if (payload.isBlank() || !payload.startsWith("{")) {
             log.error("Poison message detected in telemetry queue: id={}. Routing to DLQ.", messageId);
             routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
+            farmFlowMetrics.incrementConsumerFailed("TelemetryAlert");
             return;
         }
 
@@ -38,6 +41,7 @@ public class TelemetryAlertConsumer {
             return;
         }
 
+        farmFlowMetrics.incrementConsumerProcessed("TelemetryAlert");
         log.info("Successfully processed telemetry alert: messageId={} payload={}", messageId, payload);
     }
 
