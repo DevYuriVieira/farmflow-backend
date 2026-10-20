@@ -10,12 +10,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import com.farmflow.event.ActivityCompletedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 
 @Service
 @RequiredArgsConstructor
 public class ActivityService {
 
     private final ActivityRepository activityRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<FarmActivity> getActivities(String plantationId, String farmId, Boolean completed) {
         if (plantationId != null && completed != null) {
@@ -67,14 +70,22 @@ public class ActivityService {
             }
         }
 
-        return activityRepository.save(activity);
+        FarmActivity saved = activityRepository.save(activity);
+        if (Boolean.TRUE.equals(saved.getCompleted())) {
+            eventPublisher.publishEvent(new ActivityCompletedEvent(saved));
+        }
+        return saved;
     }
 
     public FarmActivity toggleStatus(String id, boolean completed) {
         FarmActivity activity = getActivityById(id);
         activity.setCompleted(completed);
         activity.setCompletedAt(completed ? Instant.now().toString() : null);
-        return activityRepository.save(activity);
+        FarmActivity saved = activityRepository.save(activity);
+        if (completed) {
+            eventPublisher.publishEvent(new ActivityCompletedEvent(saved));
+        }
+        return saved;
     }
 
     public void deleteActivity(String id) {
