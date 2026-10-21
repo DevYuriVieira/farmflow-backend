@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.net.URI;
 
@@ -67,6 +68,17 @@ class GlobalExceptionHandlerTest {
         assertEquals("Conflict", problem.getTitle());
         assertEquals("A database integrity constraint violation or duplicate record conflict occurred.", problem.getDetail());
         assertFalse(problem.getDetail().contains("ix_test_plate"));
+        assertEquals("test-trace-id-123", problem.getProperties().get("traceId"));
+    }
+
+    @Test
+    void shouldHandleOptimisticLockingFailureException() {
+        var ex = new ObjectOptimisticLockingFailureException("Machinery", "mach-1");
+        ProblemDetail problem = handler.handleOptimisticLocking(ex, request);
+
+        assertEquals(HttpStatus.CONFLICT.value(), problem.getStatus());
+        assertEquals("Optimistic Concurrency Conflict", problem.getTitle());
+        assertTrue(problem.getDetail().contains("modified by another concurrent transaction"));
         assertEquals("test-trace-id-123", problem.getProperties().get("traceId"));
     }
 

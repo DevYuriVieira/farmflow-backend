@@ -3,11 +3,13 @@ package com.farmflow.handlers;
 import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.exceptions.BusinessException;
 import com.farmflow.exceptions.ResourceNotFoundException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,6 +55,19 @@ public class GlobalExceptionHandler {
         );
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Conflict");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ProblemDetail handleOptimisticLocking(Exception ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The requested resource was modified by another concurrent transaction. Please reload and retry."
+        );
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Optimistic Concurrency Conflict");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
         return problem;
