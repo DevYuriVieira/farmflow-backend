@@ -10,7 +10,6 @@ import com.farmflow.repository.MachineryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -124,7 +123,9 @@ class MachineryServiceTest {
 
     @Test
     void shouldReturnFromMaintenanceWhenTransitioningToOperational() {
-        sampleMachinery.setStatus("MAINTENANCE");
+        sampleMachinery.sendToMaintenance("Setup maintenance", "2026-11-20");
+        sampleMachinery.pullDomainEvents();
+
         when(machineryRepository.findById("machinery-123")).thenReturn(Optional.of(sampleMachinery));
         when(machineryRepository.save(any(Machinery.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -142,6 +143,7 @@ class MachineryServiceTest {
 
         assertEquals("OPERATIONAL", updated.getStatus());
         assertEquals(410.0, updated.getOperatingHours());
+        assertNull(updated.getMaintenanceReason());
     }
 
     @Test

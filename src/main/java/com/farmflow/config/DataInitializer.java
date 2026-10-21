@@ -2,6 +2,7 @@ package com.farmflow.config;
 
 import com.farmflow.entity.*;
 import com.farmflow.enums.InventoryCategory;
+import com.farmflow.enums.MachineryStatus;
 import com.farmflow.enums.TelemetryType;
 import com.farmflow.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -157,7 +158,7 @@ public class DataInitializer implements CommandLineRunner {
             .model("8R 370 2024")
             .type("Trator Pesado")
             .operatingHours(842.0)
-            .status("OPERATIONAL")
+            .status(MachineryStatus.OPERATIONAL)
             .nextMaintenanceDate(LocalDate.now().plusMonths(1).toString())
             .fuelLevelPercent(82.0)
             .build());
@@ -168,7 +169,7 @@ public class DataInitializer implements CommandLineRunner {
             .model("CR 8.90 Dual Rotor")
             .type("Colheitadeira")
             .operatingHours(1210.0)
-            .status("OPERATIONAL")
+            .status(MachineryStatus.OPERATIONAL)
             .nextMaintenanceDate(LocalDate.now().plusMonths(2).toString())
             .fuelLevelPercent(65.0)
             .build());

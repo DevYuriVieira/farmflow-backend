@@ -1,9 +1,14 @@
 package com.farmflow.domain;
 
 import com.farmflow.entity.Machinery;
+import com.farmflow.enums.MachineryStatus;
+import com.farmflow.event.MachineryMaintenanceScheduledEvent;
+import com.farmflow.event.MachineryOperatingHoursUpdatedEvent;
 import com.farmflow.exceptions.BusinessException;
 import com.farmflow.exceptions.InvalidMachineryStateException;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,12 +26,13 @@ class MachineryDomainTest {
                 .build();
 
         assertEquals("OPERATIONAL", machinery.getStatus());
+        assertEquals(MachineryStatus.OPERATIONAL, machinery.getMachineryStatus());
         assertEquals(120.5, machinery.getOperatingHours());
         assertEquals(85.0, machinery.getFuelLevelPercent());
     }
 
     @Test
-    void shouldSendMachineryToMaintenanceSuccessfully() {
+    void shouldSendMachineryToMaintenanceSuccessfullyAndRecordReasonAndEmitEvent() {
         Machinery machinery = Machinery.builder()
                 .farmId("farm-001")
                 .name("Colheitadeira Case IH")
@@ -38,7 +44,18 @@ class MachineryDomainTest {
         machinery.sendToMaintenance("Troca de filtro e oleo hidráulico", "2026-11-15");
 
         assertEquals("MAINTENANCE", machinery.getStatus());
+        assertEquals(MachineryStatus.MAINTENANCE, machinery.getMachineryStatus());
         assertEquals("2026-11-15", machinery.getNextMaintenanceDate());
+        assertEquals("Troca de filtro e oleo hidráulico", machinery.getMaintenanceReason());
+
+        List<Object> events = machinery.pullDomainEvents();
+        assertEquals(1, events.size());
+        assertInstanceOf(MachineryMaintenanceScheduledEvent.class, events.get(0));
+        MachineryMaintenanceScheduledEvent event = (MachineryMaintenanceScheduledEvent) events.get(0);
+        assertEquals("Troca de filtro e oleo hidráulico", event.reason());
+        assertEquals("2026-11-15", event.expectedDate());
+
+        assertTrue(machinery.pullDomainEvents().isEmpty());
     }
 
     @Test
@@ -60,7 +77,7 @@ class MachineryDomainTest {
     }
 
     @Test
-    void shouldReturnFromMaintenanceSuccessfully() {
+    void shouldReturnFromMaintenanceSuccessfullyAndClearReason() {
         Machinery machinery = Machinery.builder()
                 .farmId("farm-001")
                 .name("Trator Massey Ferguson")
@@ -68,12 +85,15 @@ class MachineryDomainTest {
                 .type("TRACTOR")
                 .operatingHours(350.0)
                 .status("MAINTENANCE")
+                .maintenanceReason("Ajuste de transmissão")
                 .build();
 
         machinery.returnFromMaintenance(352.5);
 
         assertEquals("OPERATIONAL", machinery.getStatus());
+        assertEquals(MachineryStatus.OPERATIONAL, machinery.getMachineryStatus());
         assertEquals(352.5, machinery.getOperatingHours());
+        assertNull(machinery.getMaintenanceReason());
     }
 
     @Test
@@ -95,7 +115,7 @@ class MachineryDomainTest {
     }
 
     @Test
-    void shouldUpdateOperatingHoursSuccessfully() {
+    void shouldUpdateOperatingHoursSuccessfullyAndEmitEvent() {
         Machinery machinery = Machinery.builder()
                 .farmId("farm-001")
                 .name("Trator Fendt")
@@ -107,6 +127,13 @@ class MachineryDomainTest {
         machinery.updateOperatingHours(545.0);
 
         assertEquals(545.0, machinery.getOperatingHours());
+
+        List<Object> events = machinery.pullDomainEvents();
+        assertEquals(1, events.size());
+        assertInstanceOf(MachineryOperatingHoursUpdatedEvent.class, events.get(0));
+        MachineryOperatingHoursUpdatedEvent event = (MachineryOperatingHoursUpdatedEvent) events.get(0);
+        assertEquals(500.0, event.previousHours());
+        assertEquals(545.0, event.newHours());
     }
 
     @Test
@@ -225,5 +252,45 @@ class MachineryDomainTest {
         );
 
         assertTrue(ex.getMessage().contains("under maintenance"));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenBuildingWithBlankRequiredFields() {
+        assertThrows(BusinessException.class, () ->
+                Machinery.builder()
+                        .farmId("")
+                        .name("Trator")
+                        .model("M1")
+                        .type("T1")
+                        .build()
+        );
+
+        assertThrows(BusinessException.class, () ->
+                Machinery.builder()
+                        .farmId("f1")
+                        .name("")
+                        .model("M1")
+                        .type("T1")
+                        .build()
+        );
+    }
+
+    @Test
+    void shouldSupportDeactivationAndReactivation() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator Reserva")
+                .model("6150M")
+                .type("TRACTOR")
+                .status("OPERATIONAL")
+                .build();
+
+        machinery.deactivate();
+        assertEquals("INACTIVE", machinery.getStatus());
+        assertEquals(MachineryStatus.INACTIVE, machinery.getMachineryStatus());
+
+        machinery.activate();
+        assertEquals("OPERATIONAL", machinery.getStatus());
+        assertEquals(MachineryStatus.OPERATIONAL, machinery.getMachineryStatus());
     }
 }
