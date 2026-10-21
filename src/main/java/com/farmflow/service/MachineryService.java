@@ -1,10 +1,14 @@
 package com.farmflow.service;
 
-import com.farmflow.exceptions.ResourceNotFoundException;
+import com.farmflow.dto.MachineryDtos.CreateMachineryRequest;
+import com.farmflow.dto.MachineryDtos.UpdateMachineryRequest;
 import com.farmflow.entity.Machinery;
-import com.farmflow.dto.MachineryDtos.*;
+import com.farmflow.event.MachineryMaintenanceScheduledEvent;
+import com.farmflow.event.MachineryOperatingHoursUpdatedEvent;
+import com.farmflow.exceptions.ResourceNotFoundException;
 import com.farmflow.repository.MachineryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +21,7 @@ public class MachineryService {
 
     private final MachineryRepository machineryRepository;
     private final OutboxService outboxService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<Machinery> getMachineryByFarm(String farmId, String status) {
         if (status != null && !status.isBlank()) {
@@ -45,7 +50,13 @@ public class MachineryService {
 
         Machinery saved = machineryRepository.save(machinery);
         if ("MAINTENANCE".equalsIgnoreCase(saved.getStatus())) {
-            outboxService.recordEvent("MachineryMaintenanceScheduled", saved);
+            MachineryMaintenanceScheduledEvent event = new MachineryMaintenanceScheduledEvent(
+                    saved,
+                    "Initial maintenance registration",
+                    saved.getNextMaintenanceDate()
+            );
+            outboxService.recordEvent("MachineryMaintenanceScheduled", event);
+            eventPublisher.publishEvent(event);
         }
         return saved;
     }
@@ -54,19 +65,49 @@ public class MachineryService {
     public Machinery updateMachinery(String id, UpdateMachineryRequest request) {
         Machinery machinery = getMachineryById(id);
 
-        if (request.name() != null) machinery.setName(request.name());
-        if (request.model() != null) machinery.setModel(request.model());
-        if (request.type() != null) machinery.setType(request.type());
-        if (request.operatingHours() != null) machinery.setOperatingHours(request.operatingHours());
+        if (request.name() != null) {
+            machinery.setName(request.name());
+        }
+        if (request.model() != null) {
+            machinery.setModel(request.model());
+        }
+        if (request.type() != null) {
+            machinery.setType(request.type());
+        }
+        if (request.operatingHours() != null) {
+            Double previousHours = machinery.getOperatingHours();
+            machinery.updateOperatingHours(request.operatingHours());
+            MachineryOperatingHoursUpdatedEvent hoursEvent = new MachineryOperatingHoursUpdatedEvent(
+                    machinery,
+                    previousHours,
+                    request.operatingHours()
+            );
+            outboxService.recordEvent("MachineryOperatingHoursUpdated", hoursEvent);
+            eventPublisher.publishEvent(hoursEvent);
+        }
+        if (request.fuelLevelPercent() != null) {
+            machinery.updateFuelLevel(request.fuelLevelPercent());
+        }
         if (request.status() != null) {
             String oldStatus = machinery.getStatus();
-            machinery.setStatus(request.status());
             if ("MAINTENANCE".equalsIgnoreCase(request.status()) && !"MAINTENANCE".equalsIgnoreCase(oldStatus)) {
-                outboxService.recordEvent("MachineryMaintenanceScheduled", machinery);
+                machinery.sendToMaintenance("Scheduled maintenance update", request.nextMaintenanceDate());
+                MachineryMaintenanceScheduledEvent maintenanceEvent = new MachineryMaintenanceScheduledEvent(
+                        machinery,
+                        "Scheduled maintenance update",
+                        machinery.getNextMaintenanceDate()
+                );
+                outboxService.recordEvent("MachineryMaintenanceScheduled", maintenanceEvent);
+                eventPublisher.publishEvent(maintenanceEvent);
+            } else if ("OPERATIONAL".equalsIgnoreCase(request.status()) && "MAINTENANCE".equalsIgnoreCase(oldStatus)) {
+                machinery.returnFromMaintenance(request.operatingHours());
+            } else {
+                machinery.setStatus(request.status());
             }
         }
-        if (request.nextMaintenanceDate() != null) machinery.setNextMaintenanceDate(request.nextMaintenanceDate());
-        if (request.fuelLevelPercent() != null) machinery.setFuelLevelPercent(request.fuelLevelPercent());
+        if (request.nextMaintenanceDate() != null) {
+            machinery.setNextMaintenanceDate(request.nextMaintenanceDate());
+        }
         machinery.setUpdatedAt(Instant.now());
 
         return machineryRepository.save(machinery);
