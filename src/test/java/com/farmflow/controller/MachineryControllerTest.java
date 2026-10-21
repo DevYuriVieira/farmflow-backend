@@ -16,9 +16,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+import com.farmflow.support.AbstractIntegrationTest;
+
 @AutoConfigureMockMvc
-class MachineryControllerTest {
+class MachineryControllerTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

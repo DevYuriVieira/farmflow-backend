@@ -24,6 +24,10 @@ public class MachineryService {
     private final OutboxService outboxService;
     private final ApplicationEventPublisher eventPublisher;
 
+    public List<Machinery> getAllMachinery() {
+        return machineryRepository.findAll();
+    }
+
     public List<Machinery> getMachineryByFarm(String farmId, String status) {
         if (status != null && !status.isBlank()) {
             return machineryRepository.findByFarmIdAndStatus(farmId, status);

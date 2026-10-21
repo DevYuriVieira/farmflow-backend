@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -82,6 +83,19 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ProblemDetail handleMethodNotSupported(HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                ex.getMessage() != null ? ex.getMessage() : "Request method not supported"
+        );
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Method Not Allowed");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ProblemDetail handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
@@ -110,6 +124,7 @@ public class GlobalExceptionHandler {
         problem.setTitle("Validation Failed");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("invalidParams", errors);
+        problem.setProperty("validationErrors", errors);
         enrichProblemDetail(problem);
         return problem;
     }

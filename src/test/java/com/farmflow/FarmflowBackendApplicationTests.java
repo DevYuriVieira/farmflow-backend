@@ -1,15 +1,12 @@
 package com.farmflow;
 
+import com.farmflow.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class FarmflowBackendApplicationTests {
+class FarmflowBackendApplicationTests extends AbstractIntegrationTest {
 
 	@Test
 	void contextLoads() {
 	}
 
 }
-
-

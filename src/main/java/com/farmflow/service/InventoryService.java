@@ -17,6 +17,10 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
 
+    public List<InventoryItem> getAllItems() {
+        return inventoryRepository.findAll();
+    }
+
     public List<InventoryItem> getItemsByFarm(String farmId, InventoryCategory category) {
         if (category != null) {
             return inventoryRepository.findByFarmIdAndCategory(farmId, category);

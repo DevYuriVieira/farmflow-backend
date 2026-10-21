@@ -19,6 +19,11 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
 
+    @GetMapping
+    public ResponseEntity<List<InventoryItem>> getAllItems() {
+        return ResponseEntity.ok(inventoryService.getAllItems());
+    }
+
     @GetMapping("/farm/{farmId}")
     public ResponseEntity<List<InventoryItem>> getItemsByFarm(
         @PathVariable String farmId,

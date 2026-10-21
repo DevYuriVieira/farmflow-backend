@@ -18,6 +18,11 @@ public class MachineryController {
 
     private final MachineryService machineryService;
 
+    @GetMapping
+    public ResponseEntity<List<Machinery>> getAllMachinery() {
+        return ResponseEntity.ok(machineryService.getAllMachinery());
+    }
+
     @GetMapping("/farm/{farmId}")
     public ResponseEntity<List<Machinery>> getMachineryByFarm(
         @PathVariable String farmId,
