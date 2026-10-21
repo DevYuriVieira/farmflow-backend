@@ -1,0 +1,236 @@
+{
+  "id": "farmflow",
+  "realm": "farmflow",
+  "displayName": "FarmFlow Identity Realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "Admin",
+        "description": "Full administrative access across FarmFlow resources"
+      },
+      {
+        "name": "FarmManager",
+        "description": "Farm operations management access (plantations, activities, machinery)"
+      },
+      {
+        "name": "Agronomist",
+        "description": "Agronomic analysis and pest scouting access"
+      },
+      {
+        "name": "Operator",
+        "description": "Field operator and telemetry recording access"
+      }
+    ],
+    "client": {
+      "farmflow-api": [
+        {
+          "name": "Admin",
+          "description": "Administrator role for FarmFlow API",
+          "clientRole": true
+        },
+        {
+          "name": "FarmManager",
+          "description": "Farm Manager role for FarmFlow API",
+          "clientRole": true
+        },
+        {
+          "name": "Agronomist",
+          "description": "Agronomist role for FarmFlow API",
+          "clientRole": true
+        },
+        {
+          "name": "Operator",
+          "description": "Operator role for FarmFlow API",
+          "clientRole": true
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "farmflow-api",
+      "name": "FarmFlow API Resource Server",
+      "description": "FarmFlow API OAuth 2.0 / OIDC Client and Resource Server",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": false,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "farmflow-api-dev-secret",
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "name": "farmflow-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "farmflow-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@farmflow.local",
+      "email": "admin@farmflow.local",
+      "firstName": "System",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Admin"
+      ],
+      "clientRoles": {
+        "farmflow-api": [
+          "Admin"
+        ]
+      }
+    },
+    {
+      "username": "manager@farmflow.local",
+      "email": "manager@farmflow.local",
+      "firstName": "Farm",
+      "lastName": "Manager",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "FarmManager"
+      ],
+      "clientRoles": {
+        "farmflow-api": [
+          "FarmManager"
+        ]
+      }
+    },
+    {
+      "username": "agronomist@farmflow.local",
+      "email": "agronomist@farmflow.local",
+      "firstName": "Field",
+      "lastName": "Agronomist",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Agronomist"
+      ],
+      "clientRoles": {
+        "farmflow-api": [
+          "Agronomist"
+        ]
+      }
+    },
+    {
+      "username": "operator@farmflow.local",
+      "email": "operator@farmflow.local",
+      "firstName": "Machinery",
+      "lastName": "Operator",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Operator"
+      ],
+      "clientRoles": {
+        "farmflow-api": [
+          "Operator"
+        ]
+      }
+    },
+    {
+      "username": "multirole@farmflow.local",
+      "email": "multirole@farmflow.local",
+      "firstName": "Multi",
+      "lastName": "Role",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "FarmManager",
+        "Agronomist"
+      ],
+      "clientRoles": {
+        "farmflow-api": [
+          "FarmManager",
+          "Agronomist"
+        ]
+      }
+    },
+    {
+      "username": "norole@farmflow.local",
+      "email": "norole@farmflow.local",
+      "firstName": "Guest",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [],
+      "clientRoles": {
+        "farmflow-api": []
+      }
+    }
+  ]
+}
