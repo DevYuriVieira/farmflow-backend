@@ -78,4 +78,16 @@ public class ArchitectureRulesTest {
         classes()
             .that().resideInAPackage("..controller..")
             .should().notBeAnnotatedWith(Transactional.class);
+
+    @ArchTest
+    static final ArchRule servicesShouldNotDependOnControllers =
+        noClasses()
+            .that().resideInAPackage("..service..")
+            .should().dependOnClassesThat().resideInAPackage("..controller..");
+
+    @ArchTest
+    static final ArchRule consumersShouldNotDependOnControllers =
+        noClasses()
+            .that().resideInAPackage("..consumer..")
+            .should().dependOnClassesThat().resideInAPackage("..controller..");
 }
