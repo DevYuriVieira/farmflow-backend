@@ -14,9 +14,8 @@ import java.time.Instant;
 @Builder
 public class ProcessedMessage {
 
-    @Id
-    @Column(name = "message_id", nullable = false, length = 36)
-    private String messageId;
+    @EmbeddedId
+    private ProcessedMessageId id;
 
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
