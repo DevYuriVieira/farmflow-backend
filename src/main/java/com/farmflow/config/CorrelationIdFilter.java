@@ -19,7 +19,9 @@ import java.util.UUID;
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
+    public static final String TRACEPARENT_HEADER = "traceparent";
     public static final String MDC_CORRELATION_ID_KEY = "correlationId";
+    public static final String MDC_TRACEPARENT_KEY = "traceparent";
 
     @Override
     protected void doFilterInternal(
@@ -32,13 +34,22 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             correlationId = UUID.randomUUID().toString();
         }
 
+        String traceParent = request.getHeader(TRACEPARENT_HEADER);
+        if (!StringUtils.hasText(traceParent) || !W3CTraceContextUtils.isValidW3CTraceParent(traceParent)) {
+            traceParent = W3CTraceContextUtils.generateTraceParent(correlationId);
+        }
+
         MDC.put(MDC_CORRELATION_ID_KEY, correlationId);
+        MDC.put(MDC_TRACEPARENT_KEY, traceParent);
+
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
+        response.setHeader(TRACEPARENT_HEADER, traceParent);
 
         try {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(MDC_CORRELATION_ID_KEY);
+            MDC.remove(MDC_TRACEPARENT_KEY);
         }
     }
 }
