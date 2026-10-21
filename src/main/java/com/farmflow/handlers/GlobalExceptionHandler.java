@@ -5,6 +5,8 @@ import com.farmflow.exceptions.BusinessException;
 import com.farmflow.exceptions.ResourceNotFoundException;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ import java.util.UUID;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final URI DEFAULT_TYPE = URI.create("https://tools.ietf.org/html/rfc9457");
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -49,6 +52,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        String traceId = getTraceId();
+        log.warn("Database integrity violation: traceId={}, uri={}", traceId, request.getRequestURI());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 "A database integrity constraint violation or duplicate record conflict occurred."
@@ -56,12 +61,15 @@ public class GlobalExceptionHandler {
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Conflict");
         problem.setInstance(URI.create(request.getRequestURI()));
-        enrichProblemDetail(problem);
+        problem.setProperty("traceId", traceId);
+        problem.setProperty("timestamp", Instant.now());
         return problem;
     }
 
     @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
     public ProblemDetail handleOptimisticLocking(Exception ex, HttpServletRequest request) {
+        String traceId = getTraceId();
+        log.warn("Optimistic lock conflict: traceId={}, uri={}", traceId, request.getRequestURI());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 "The requested resource was modified by another concurrent transaction. Please reload and retry."
@@ -69,7 +77,8 @@ public class GlobalExceptionHandler {
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Optimistic Concurrency Conflict");
         problem.setInstance(URI.create(request.getRequestURI()));
-        enrichProblemDetail(problem);
+        problem.setProperty("traceId", traceId);
+        problem.setProperty("timestamp", Instant.now());
         return problem;
     }
 
@@ -107,6 +116,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex, HttpServletRequest request) {
+        String traceId = getTraceId();
+        log.error("Unhandled internal server error: traceId={}, uri={}", traceId, request.getRequestURI(), ex);
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "An unexpected internal error occurred. Please contact support referencing the traceId."
@@ -114,16 +125,21 @@ public class GlobalExceptionHandler {
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Internal Server Error");
         problem.setInstance(URI.create(request.getRequestURI()));
-        enrichProblemDetail(problem);
+        problem.setProperty("traceId", traceId);
+        problem.setProperty("timestamp", Instant.now());
         return problem;
     }
 
     private void enrichProblemDetail(ProblemDetail problem) {
+        problem.setProperty("traceId", getTraceId());
+        problem.setProperty("timestamp", Instant.now());
+    }
+
+    private String getTraceId() {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
         if (correlationId == null || correlationId.isBlank()) {
-            correlationId = UUID.randomUUID().toString();
+            return UUID.randomUUID().toString();
         }
-        problem.setProperty("traceId", correlationId);
-        problem.setProperty("timestamp", Instant.now());
+        return correlationId;
     }
 }
