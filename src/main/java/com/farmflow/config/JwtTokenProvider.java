@@ -17,9 +17,15 @@ public class JwtTokenProvider {
     private final long expirationMs;
 
     public JwtTokenProvider(
-        @Value("${farmflow.jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}") String secret,
+        @Value("${farmflow.jwt.secret:}") String secret,
         @Value("${farmflow.jwt.expiration-ms:86400000}") long expirationMs
     ) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("Critical security violation: 'farmflow.jwt.secret' must be explicitly provided in environment configuration.");
+        }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("Critical security violation: 'farmflow.jwt.secret' must be at least 256 bits (32 bytes).");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
