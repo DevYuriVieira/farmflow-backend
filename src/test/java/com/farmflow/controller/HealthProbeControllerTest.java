@@ -100,4 +100,48 @@ class HealthProbeControllerTest {
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         assertEquals("UNHEALTHY", response.getBody().get("status"));
     }
+
+    @Test
+    void shouldReportDegradedWhenOutboxLagExceedsThreshold() throws SQLException {
+        java.sql.Connection sqlConn = mock(java.sql.Connection.class);
+        when(sqlConn.isValid(2)).thenReturn(true);
+        when(dataSource.getConnection()).thenReturn(sqlConn);
+
+        Connection rabbitConn = mock(Connection.class);
+        when(rabbitConn.isOpen()).thenReturn(true);
+        when(rabbitConnectionFactory.createConnection()).thenReturn(rabbitConn);
+
+        com.farmflow.service.OutboxService outboxService = mock(com.farmflow.service.OutboxService.class);
+        when(outboxService.getOldestMessageLagSeconds()).thenReturn(150.0);
+        when(outboxService.getDeadLetterCount()).thenReturn(0L);
+
+        HealthProbeController probeController = new HealthProbeController(dataSource, rabbitConnectionFactory, outboxService);
+        ResponseEntity<Map<String, Object>> response = probeController.dependencies();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("DEGRADED", response.getBody().get("status"));
+        assertTrue(response.getBody().get("detail").toString().contains("elevated"));
+    }
+
+    @Test
+    void shouldReportDegradedWhenDeadLettersExist() throws SQLException {
+        java.sql.Connection sqlConn = mock(java.sql.Connection.class);
+        when(sqlConn.isValid(2)).thenReturn(true);
+        when(dataSource.getConnection()).thenReturn(sqlConn);
+
+        Connection rabbitConn = mock(Connection.class);
+        when(rabbitConn.isOpen()).thenReturn(true);
+        when(rabbitConnectionFactory.createConnection()).thenReturn(rabbitConn);
+
+        com.farmflow.service.OutboxService outboxService = mock(com.farmflow.service.OutboxService.class);
+        when(outboxService.getOldestMessageLagSeconds()).thenReturn(5.0);
+        when(outboxService.getDeadLetterCount()).thenReturn(2L);
+
+        HealthProbeController probeController = new HealthProbeController(dataSource, rabbitConnectionFactory, outboxService);
+        ResponseEntity<Map<String, Object>> response = probeController.dependencies();
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("DEGRADED", response.getBody().get("status"));
+        assertTrue(response.getBody().get("detail").toString().contains("dead letters"));
+    }
 }

@@ -1,7 +1,8 @@
 package com.farmflow.controller;
 
-import lombok.RequiredArgsConstructor;
+import com.farmflow.service.OutboxService;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,14 +14,29 @@ import java.sql.Connection;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/health")
-@RequiredArgsConstructor
 public class HealthProbeController {
 
     private final DataSource dataSource;
     private final ConnectionFactory rabbitConnectionFactory;
+    private final OutboxService outboxService;
+
+    public HealthProbeController(DataSource dataSource, ConnectionFactory rabbitConnectionFactory) {
+        this(dataSource, rabbitConnectionFactory, null);
+    }
+
+    @Autowired
+    public HealthProbeController(DataSource dataSource,
+                                 ConnectionFactory rabbitConnectionFactory,
+                                 @Autowired(required = false) OutboxService outboxService) {
+        this.dataSource = dataSource;
+        this.rabbitConnectionFactory = rabbitConnectionFactory;
+        this.outboxService = outboxService;
+    }
 
     @GetMapping("/live")
     public ResponseEntity<Map<String, Object>> liveness() {
@@ -55,6 +71,15 @@ public class HealthProbeController {
         dependencies.put("database", dbHealthy ? "HEALTHY" : "UNHEALTHY");
         dependencies.put("rabbitmq", rabbitHealthy ? "HEALTHY" : "UNHEALTHY");
 
+        Double outboxLag = null;
+        Long deadCount = null;
+        if (outboxService != null) {
+            outboxLag = outboxService.getOldestMessageLagSeconds();
+            deadCount = outboxService.getDeadLetterCount();
+            dependencies.put("outboxLagSeconds", outboxLag);
+            dependencies.put("outboxDeadCount", deadCount);
+        }
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now().toString());
         body.put("dependencies", dependencies);
@@ -68,6 +93,12 @@ public class HealthProbeController {
         if (!rabbitHealthy) {
             body.put("status", "DEGRADED");
             body.put("detail", "Message broker is offline. Synchronous write commands persist safely via Transactional Outbox.");
+            return ResponseEntity.ok(body);
+        }
+
+        if (outboxLag != null && (outboxLag > 120.0 || (deadCount != null && deadCount > 0))) {
+            body.put("status", "DEGRADED");
+            body.put("detail", "Outbox message backlog lag is elevated or dead letters require operator inspection.");
             return ResponseEntity.ok(body);
         }
 
@@ -86,10 +117,16 @@ public class HealthProbeController {
 
     private boolean checkRabbitMqConnectivity() {
         try {
-            var conn = rabbitConnectionFactory.createConnection();
-            boolean open = conn.isOpen();
-            conn.close();
-            return open;
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    var conn = rabbitConnectionFactory.createConnection();
+                    boolean open = conn.isOpen();
+                    conn.close();
+                    return open;
+                } catch (Exception e) {
+                    return false;
+                }
+            }).get(2, TimeUnit.SECONDS);
         } catch (Exception e) {
             return false;
         }
