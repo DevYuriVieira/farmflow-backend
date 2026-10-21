@@ -11,6 +11,8 @@
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-000000?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 [![RFC 9457](https://img.shields.io/badge/RFC%209457-ProblemDetails-blue)](#error-handling)
+[![ArchUnit](https://img.shields.io/badge/ArchUnit-1.4.0-red?logo=junit5&logoColor=white)](#arquitetura-do-sistema)
+[![k6 Load Testing](https://img.shields.io/badge/k6-Performance-7D64FF?logo=k6&logoColor=white)](docs/performance/P2-CAPACITY-REPORT.md)
 [![Production Gate](https://img.shields.io/badge/Production%20Gate-Approved-success)](#production-gate)
 
 **Enterprise Agro-Industrial Management & Telemetry Backend Engine**  
@@ -267,13 +269,20 @@ docker compose up --build
 
 ### 2. Execução dos Testes Automatizados
 ```bash
-# Executar todos os testes de unidade e resiliência
+# Executar todos os testes de unidade, arquitetura (ArchUnit) e resiliência
 .\mvnw.cmd test
 
-# Executar suíte de testes de carga k6
+# Executar suíte completa de testes de carga e capacidade k6
 .\load-tests\run-benchmarks.ps1 -Suite Health
-.\load-tests\run-benchmarks.ps1 -Suite Telemetry
+.\load-tests\run-benchmarks.ps1 -Suite Domain
+.\load-tests\run-benchmarks.ps1 -Suite Stress
+.\load-tests\run-benchmarks.ps1 -Suite RateLimit
+.\load-tests\run-benchmarks.ps1 -Suite All
 ```
+
+### 3. Relatório Formal de Engenharia de Capacidade
+Consulte o relatório completo com a metodologia `EVIDENCE -> OBSERVATION -> ANALYSIS -> CONCLUSION -> VERDICT`:
+- [Sprint P2 Capacity & Operational Proof Report](docs/performance/P2-CAPACITY-REPORT.md)
 
 ---
 
