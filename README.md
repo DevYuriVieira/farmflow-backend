@@ -7,6 +7,7 @@
 [![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Hibernate 7](https://img.shields.io/badge/Hibernate-7.x-59666C?logo=hibernate&logoColor=white)](https://hibernate.org/)
 [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.x-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![Keycloak](https://img.shields.io/badge/Keycloak-26.1-blue?logo=keycloak&logoColor=white)](https://www.keycloak.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-000000?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 [![RFC 9457](https://img.shields.io/badge/RFC%209457-ProblemDetails-blue)](#error-handling)
@@ -32,11 +33,14 @@
 | **Concorrência no Outbox** | **`FOR UPDATE SKIP LOCKED`** (Workers paralelos selecionam lotes sem contenção de lock) |
 | **Topologia de Resiliência** | Topic Exchange (`farmflow.events`), DLX Direct, Filas TTL de Retry (10s, 30s, 90s) e DLQ |
 | **Idempotência de Consumo** | Desduplicação atômica via `message_id` auditado (`processed_messages` PK) |
+| **Autenticação & OIDC** | Suporte a OIDC Resource Server via Keycloak 26.1 (RS256) e RBAC (`Admin`, `FarmManager`, `Agronomist`, `Operator`) |
 | **Rastreamento Distribuído** | W3C `traceparent` contínuo HTTP &rarr; Outbox &rarr; RabbitMQ &rarr; Consumidor &rarr; Jaeger |
 | **Tratamento de Falhas** | **RFC 9457 `ProblemDetails`** sanitizado com mascaramento total de credenciais e SQL |
 | **Proteção de Runtime** | Rate Limiting em memória por instância (Fixed Window: 60 req/min) com RFC 9457 e `Retry-After: 60` |
+| **Métricas Operacionais** | Micrometer (`farmflow.outbox.*`, `farmflow.consumer.*`) com estrita disciplina de cardinalidade |
 | **Sondas de Saúde (Probes)** | Liveness (`/health/live`), Readiness (`/health/ready`), Dependências (`/health/dependencies` com estado `DEGRADED`) |
-| **Governança de Engenharia** | 10 Architecture Decision Records (ADRs) + 4 Cadernos Operacionais de Remediação (SRE) |
+| **Governança de Engenharia** | **16 Architecture Decision Records (ADRs)** + 4 Cadernos Operacionais de Remediação (SRE) |
+| **Busca Semântica Local** | 100% offline em Python (LanceDB + SentenceTransformers `all-MiniLM-L6-v2`) para código Java e ADRs |
 | **Testes de Carga & Automação** | k6 em JavaScript (`auth-helper.js`, benchmarks de saúde e telemetria) + runner PowerShell |
 
 ---
@@ -199,7 +203,7 @@ Todos os erros retornados pela API aderem ao padrão IETF RFC 9457:
 
 ---
 
-## Decisões Arquiteturais (ADRs)
+## Decisões Arquiteturais (16 ADRs)
 
 | ADR | Título | Foco Arquitetural |
 |---|---|---|
@@ -213,6 +217,12 @@ Todos os erros retornados pela API aderem ao padrão IETF RFC 9457:
 | [ADR-008](docs/adr/ADR-008-in-process-rate-limiting.md) | In-Process Rate Limiting with Retry-After Header | Proteção de nós contra sobrecarga com HTTP 429 e `Retry-After: 60` |
 | [ADR-009](docs/adr/ADR-009-health-check-probing-semantics.md) | Decoupled Health Probing and Graceful Degradation Semantics | Sondas de saúde desacopladas e relatório com estado `DEGRADED` |
 | [ADR-010](docs/adr/ADR-010-sli-slo-error-budget.md) | Service Level Objectives (SLOs) and Error Budget Framework | Framework de metas quantitativas de latência e disponibilidade |
+| [ADR-011](docs/adr/ADR-011-operational-metrics-and-cardinality.md) | Operational Metrics and Telemetry Cardinality Discipline | Métricas com Micrometer e cardinalidade delimitada para Outbox e Consumer |
+| [ADR-012](docs/adr/ADR-012-empirical-performance-baseline-k6.md) | Empirical Performance Baseline via k6 | Baseline reproduzível com k6 em perfis de carga nominal, sustentada e spike |
+| [ADR-013](docs/adr/ADR-013-capacity-engineering-and-domain-workloads.md) | Capacity Engineering and Domain Workload Boundaries | Delimitação estrita entre vazão in-memory e capacidade relacional de domínio |
+| [ADR-014](docs/adr/ADR-014-multi-tenant-isolation-security.md) | Multi-Tenant Isolation and Farm Security Boundaries | Avaliação declarativa de acesso multi-inquilino via Spring Method Security |
+| [ADR-015](docs/adr/ADR-015-zero-comment-code-discipline.md) | Zero-Comment Code Discipline and Clean Code Policy | Política estrita de zero comentários em arquivos de código Java |
+| [ADR-016](docs/adr/ADR-016-openid-connect-keycloak.md) | OpenID Connect Resource Server with Keycloak and RS256 | Federação com Keycloak OIDC, validação assimétrica RS256 e RBAC |
 
 ---
 
@@ -227,14 +237,31 @@ Todos os erros retornados pela API aderem ao padrão IETF RFC 9457:
 
 ---
 
+## Busca Semântica Local no Código (Python & LanceDB)
+
+A ferramenta em Python permite pesquisar semanticamente em classes Java, métodos e ADRs 100% offline:
+```bash
+# Instalar dependências da ferramenta vetorial
+pip install -r tools/vector-search/requirements.txt
+
+# Indexar o repositório em banco vetorial local (.vector-db/)
+python -m tools.vector_search.index
+
+# Realizar busca semântica por similaridade de cosseno
+python -m tools.vector_search.search "outbox skip locked"
+```
+
+---
+
 ## Como Executar
 
-### 1. Stack Containerizada Completa (API + PostgreSQL + RabbitMQ + Jaeger)
+### 1. Stack Containerizada Completa (API + PostgreSQL + RabbitMQ + Keycloak + Jaeger)
 ```bash
 docker compose up --build
 ```
 - API REST: `http://localhost:8080/v1`
 - Swagger UI: `http://localhost:8080/v1/swagger-ui.html`
+- Keycloak IdP: `http://localhost:8081` (Realm: `farmflow`, Admin: `admin` / `admin`)
 - RabbitMQ Management: `http://localhost:15672` (Usuário: `guest`, Senha: `guest`)
 - Jaeger UI: `http://localhost:16686`
 
