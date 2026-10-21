@@ -23,6 +23,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final int MAX_REQUESTS_PER_MINUTE = 60;
     private static final int RETRY_AFTER_SECONDS = 60;
+    private static final int MAX_CACHE_SIZE = 10000;
     private final Map<String, RequestCounter> requestCounts = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -34,6 +35,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String clientIp = getClientIp(request);
         long currentMinute = System.currentTimeMillis() / 60000;
+
+        evictStaleEntries(currentMinute);
 
         RequestCounter counter = requestCounts.compute(clientIp, (key, existing) -> {
             if (existing == null || existing.minute() != currentMinute) {
@@ -68,6 +71,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void evictStaleEntries(long currentMinute) {
+        if (requestCounts.size() > MAX_CACHE_SIZE) {
+            requestCounts.entrySet().removeIf(entry -> entry.getValue().minute() < currentMinute);
+        }
     }
 
     private String getClientIp(HttpServletRequest request) {
