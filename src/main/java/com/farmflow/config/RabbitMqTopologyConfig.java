@@ -27,6 +27,7 @@ public class RabbitMqTopologyConfig {
     public static final String DLQ_QUEUE = "farmflow.events.dlq";
 
     public static final String ROUTING_TELEMETRY = "telemetry.alert.#";
+    public static final String ROUTING_TELEMETRY_RETRY_RETURN = "telemetry.alerts.#";
     public static final String ROUTING_PEST = "pest.detected.#";
     public static final String ROUTING_MACHINERY = "machinery.maintenance.#";
 
@@ -99,6 +100,11 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding telemetryRetryReturnBinding(Queue telemetryAlertsQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(telemetryAlertsQueue).to(mainExchange).with(ROUTING_TELEMETRY_RETRY_RETURN);
+    }
+
+    @Bean
     public Binding pestBinding(Queue pestDetectedQueue, TopicExchange mainExchange) {
         return BindingBuilder.bind(pestDetectedQueue).to(mainExchange).with(ROUTING_PEST);
     }
@@ -114,13 +120,43 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding retry10sPestBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("pest.detected.retry.10s");
+    }
+
+    @Bean
+    public Binding retry10sMachineryBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("machinery.maintenance.retry.10s");
+    }
+
+    @Bean
     public Binding retry30sBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("telemetry.alerts.retry.30s");
     }
 
     @Bean
+    public Binding retry30sPestBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("pest.detected.retry.30s");
+    }
+
+    @Bean
+    public Binding retry30sMachineryBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("machinery.maintenance.retry.30s");
+    }
+
+    @Bean
     public Binding retry90sBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("telemetry.alerts.retry.90s");
+    }
+
+    @Bean
+    public Binding retry90sPestBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("pest.detected.retry.90s");
+    }
+
+    @Bean
+    public Binding retry90sMachineryBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("machinery.maintenance.retry.90s");
     }
 
     @Bean
@@ -138,6 +174,12 @@ public class RabbitMqTopologyConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(jsonMessageConverter);
         template.setMandatory(true);
+        template.setReturnsCallback(returned -> {
+            org.slf4j.LoggerFactory.getLogger(RabbitMqTopologyConfig.class).error(
+                    "AMQP Unroutable Message returned by broker! replyCode={} replyText={} exchange={} routingKey={}",
+                    returned.getReplyCode(), returned.getReplyText(), returned.getExchange(), returned.getRoutingKey()
+            );
+        });
         return template;
     }
 }

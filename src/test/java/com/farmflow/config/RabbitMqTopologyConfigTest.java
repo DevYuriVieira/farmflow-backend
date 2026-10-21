@@ -58,4 +58,38 @@ class RabbitMqTopologyConfigTest {
         assertEquals("farmflow.events.dlq", dlq.getName());
         assertTrue(dlq.isDurable());
     }
+
+    @Test
+    void shouldConfigureAllRetryAndDlqBindings() {
+        TopicExchange mainExchange = config.mainExchange();
+        DirectExchange dlxExchange = config.dlxExchange();
+
+        Queue telemetryQueue = config.telemetryAlertsQueue();
+        Queue pestQueue = config.pestDetectedQueue();
+        Queue machineryQueue = config.machineryMaintenanceQueue();
+
+        Queue retry10s = config.retry10sQueue();
+        Queue retry30s = config.retry30sQueue();
+        Queue retry90s = config.retry90sQueue();
+        Queue dlq = config.dlqQueue();
+
+        assertEquals("telemetry.alert.#", config.telemetryBinding(telemetryQueue, mainExchange).getRoutingKey());
+        assertEquals("telemetry.alerts.#", config.telemetryRetryReturnBinding(telemetryQueue, mainExchange).getRoutingKey());
+        assertEquals("pest.detected.#", config.pestBinding(pestQueue, mainExchange).getRoutingKey());
+        assertEquals("machinery.maintenance.#", config.machineryBinding(machineryQueue, mainExchange).getRoutingKey());
+
+        assertEquals("telemetry.alerts.retry.10s", config.retry10sBinding(retry10s, dlxExchange).getRoutingKey());
+        assertEquals("pest.detected.retry.10s", config.retry10sPestBinding(retry10s, dlxExchange).getRoutingKey());
+        assertEquals("machinery.maintenance.retry.10s", config.retry10sMachineryBinding(retry10s, dlxExchange).getRoutingKey());
+
+        assertEquals("telemetry.alerts.retry.30s", config.retry30sBinding(retry30s, dlxExchange).getRoutingKey());
+        assertEquals("pest.detected.retry.30s", config.retry30sPestBinding(retry30s, dlxExchange).getRoutingKey());
+        assertEquals("machinery.maintenance.retry.30s", config.retry30sMachineryBinding(retry30s, dlxExchange).getRoutingKey());
+
+        assertEquals("telemetry.alerts.retry.90s", config.retry90sBinding(retry90s, dlxExchange).getRoutingKey());
+        assertEquals("pest.detected.retry.90s", config.retry90sPestBinding(retry90s, dlxExchange).getRoutingKey());
+        assertEquals("machinery.maintenance.retry.90s", config.retry90sMachineryBinding(retry90s, dlxExchange).getRoutingKey());
+
+        assertEquals("events.dlq", config.dlqBinding(dlq, dlxExchange).getRoutingKey());
+    }
 }
