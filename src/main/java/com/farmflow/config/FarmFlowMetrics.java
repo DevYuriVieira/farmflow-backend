@@ -50,4 +50,11 @@ public class FarmFlowMetrics {
                 .register(meterRegistry)
                 .increment();
     }
+
+    public void incrementConsumerDuplicate(String eventType) {
+        Counter.builder("farmflow.consumer.messages.duplicate")
+                .tag("event_type", eventType != null ? eventType : "unknown")
+                .register(meterRegistry)
+                .increment();
+    }
 }
