@@ -34,8 +34,17 @@ public class OutboxProcessor {
         for (OutboxMessage message : messages) {
             try {
                 localEventPublisher.publishEvent(message);
-                String routingKey = resolveRoutingKey(message.getEventType());
-                rabbitMqEventPublisher.publish(routingKey, message.getPayload(), message.getTraceParent());
+                String routingKey = message.getRoutingKey() != null && !message.getRoutingKey().isBlank()
+                        ? message.getRoutingKey()
+                        : resolveRoutingKey(message.getEventType());
+
+                rabbitMqEventPublisher.publish(
+                        routingKey,
+                        message.getPayload(),
+                        message.getId(),
+                        message.getCorrelationId(),
+                        message.getTraceParent()
+                );
                 outboxService.markProcessed(message.getId());
                 farmFlowMetrics.incrementOutboxPublished();
             } catch (Exception e) {

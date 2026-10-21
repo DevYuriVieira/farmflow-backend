@@ -69,7 +69,7 @@ class FailureInjectionAndResilienceTest {
 
         when(outboxService.fetchUnprocessedBatch(3, 20)).thenReturn(List.of(pendingMessage));
         doThrow(new AmqpConnectException(new java.net.ConnectException("Connection refused to RabbitMQ:5672")))
-                .when(rabbitMqEventPublisher).publish(anyString(), anyString(), anyString());
+                .when(rabbitMqEventPublisher).publish(anyString(), anyString(), any(), any(), any());
 
         assertDoesNotThrow(() -> outboxProcessor.processOutboxMessages());
 
@@ -95,7 +95,7 @@ class FailureInjectionAndResilienceTest {
 
         outboxProcessor.processOutboxMessages();
 
-        verify(rabbitMqEventPublisher, times(1)).publish(eq("telemetry.alert.critical"), eq("{\"readingId\":\"r-200\"}"), eq("trace-200"));
+        verify(rabbitMqEventPublisher, times(1)).publish(eq("telemetry.alert.critical"), eq("{\"readingId\":\"r-200\"}"), eq("msg-200"), isNull(), eq("trace-200"));
         verify(outboxService, times(1)).markProcessed("msg-200");
         verify(farmFlowMetrics, times(1)).incrementOutboxPublished();
     }
