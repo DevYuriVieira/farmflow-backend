@@ -146,6 +146,18 @@ public class OutboxService {
         return outboxRepository.countByProcessedOnIsNull();
     }
 
+    public double getOldestMessageLagSeconds() {
+        Instant oldest = outboxRepository.findOldestUnprocessedOccurredOn();
+        if (oldest == null) {
+            return 0.0;
+        }
+        return Math.max(0.0, java.time.Duration.between(oldest, Instant.now()).toMillis() / 1000.0);
+    }
+
+    public long getDeadLetterCount() {
+        return outboxRepository.countByStatus(OutboxStatus.DEAD);
+    }
+
     public String resolveRoutingKey(String eventType) {
         if (eventType == null) {
             return "events.general";
@@ -154,7 +166,6 @@ public class OutboxService {
     }
 
     private long calculateExponentialBackoff(int attempt) {
-        // 5s, 15s, 45s + jitter
         long base = (long) (5 * Math.pow(3, Math.max(0, attempt - 1)));
         long jitter = ThreadLocalRandom.current().nextLong(1, 4);
         return Math.min(base + jitter, 300);

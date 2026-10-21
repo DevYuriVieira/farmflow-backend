@@ -4,13 +4,18 @@ import com.farmflow.service.OutboxService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class FarmFlowMetrics {
 
     private final Counter outboxPublishedCounter;
     private final Counter outboxFailedCounter;
+    private final Timer outboxPublishTimer;
     private final MeterRegistry meterRegistry;
 
     public FarmFlowMetrics(MeterRegistry meterRegistry, OutboxService outboxService) {
@@ -24,8 +29,21 @@ public class FarmFlowMetrics {
                 .description("Total number of outbox messages that failed publishing")
                 .register(meterRegistry);
 
+        this.outboxPublishTimer = Timer.builder("farmflow.outbox.publish.duration")
+                .description("Latency distribution of publishing messages from outbox to RabbitMQ")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
         Gauge.builder("farmflow.outbox.backlog.count", outboxService, OutboxService::getBacklogCount)
                 .description("Current number of pending outbox messages")
+                .register(meterRegistry);
+
+        Gauge.builder("farmflow.outbox.oldest.message.age.seconds", outboxService, OutboxService::getOldestMessageLagSeconds)
+                .description("Age in seconds of the oldest unprocessed outbox message (lag)")
+                .register(meterRegistry);
+
+        Gauge.builder("farmflow.outbox.dead.count", outboxService, OutboxService::getDeadLetterCount)
+                .description("Number of dead outbox messages that exceeded max attempts")
                 .register(meterRegistry);
     }
 
@@ -35,6 +53,16 @@ public class FarmFlowMetrics {
 
     public void incrementOutboxFailed() {
         outboxFailedCounter.increment();
+    }
+
+    public void recordOutboxPublishDuration(Duration duration) {
+        if (duration != null) {
+            outboxPublishTimer.record(duration);
+        }
+    }
+
+    public void recordOutboxPublishDurationNanos(long nanos) {
+        outboxPublishTimer.record(nanos, TimeUnit.NANOSECONDS);
     }
 
     public void incrementConsumerProcessed(String eventType) {
@@ -56,5 +84,23 @@ public class FarmFlowMetrics {
                 .tag("event_type", eventType != null ? eventType : "unknown")
                 .register(meterRegistry)
                 .increment();
+    }
+
+    public void recordConsumerDuration(String eventType, Duration duration) {
+        if (duration != null) {
+            Timer.builder("farmflow.consumer.processing.duration")
+                    .tag("event_type", eventType != null ? eventType : "unknown")
+                    .publishPercentiles(0.5, 0.95, 0.99)
+                    .register(meterRegistry)
+                    .record(duration);
+        }
+    }
+
+    public void recordConsumerDurationNanos(String eventType, long nanos) {
+        Timer.builder("farmflow.consumer.processing.duration")
+                .tag("event_type", eventType != null ? eventType : "unknown")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry)
+                .record(nanos, TimeUnit.NANOSECONDS);
     }
 }

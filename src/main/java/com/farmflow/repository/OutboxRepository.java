@@ -43,4 +43,7 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, String> {
     long countByProcessedOnIsNull();
 
     long countByStatus(OutboxStatus status);
+
+    @Query("SELECT MIN(m.occurredOn) FROM OutboxMessage m WHERE m.processedOn IS NULL AND m.status != com.farmflow.enums.OutboxStatus.DEAD")
+    Instant findOldestUnprocessedOccurredOn();
 }

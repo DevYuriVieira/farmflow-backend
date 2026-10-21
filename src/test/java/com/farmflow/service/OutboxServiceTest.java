@@ -137,4 +137,40 @@ class OutboxServiceTest {
         assertEquals("Broker connection refused", msg.getLastError());
         assertNull(msg.getProcessedOn());
     }
+
+    @Test
+    void shouldCalculateOldestMessageLagSeconds() {
+        Instant twoMinutesAgo = Instant.now().minusSeconds(120);
+        when(outboxRepository.findOldestUnprocessedOccurredOn()).thenReturn(twoMinutesAgo);
+
+        double lag = outboxService.getOldestMessageLagSeconds();
+
+        assertTrue(lag >= 119.0 && lag <= 125.0);
+    }
+
+    @Test
+    void shouldReturnDeadLetterCount() {
+        when(outboxRepository.countByStatus(com.farmflow.enums.OutboxStatus.DEAD)).thenReturn(4L);
+
+        long deadCount = outboxService.getDeadLetterCount();
+
+        assertEquals(4L, deadCount);
+    }
+
+    @Test
+    void shouldRecordPublishDurationMetricOnSuccessfulPublish() {
+        OutboxMessage msg = OutboxMessage.builder()
+                .id("msg-timer-1")
+                .eventType("TelemetryAlertEvent")
+                .payload("{}")
+                .occurredOn(Instant.now())
+                .build();
+        when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
+        when(outboxRepository.findById("msg-timer-1")).thenReturn(Optional.of(msg));
+
+        outboxProcessor.processOutboxMessages();
+
+        verify(farmFlowMetrics, times(1)).recordOutboxPublishDurationNanos(anyLong());
+        verify(farmFlowMetrics, times(1)).incrementOutboxPublished();
+    }
 }

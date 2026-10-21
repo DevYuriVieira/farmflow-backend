@@ -34,10 +34,9 @@ public class OutboxProcessor {
         for (OutboxMessage message : messages) {
             try {
                 localEventPublisher.publishEvent(message);
-                String routingKey = message.getRoutingKey() != null && !message.getRoutingKey().isBlank()
-                        ? message.getRoutingKey()
-                        : resolveRoutingKey(message.getEventType());
+                String routingKey = resolveRoutingKey(message);
 
+                long startNanos = System.nanoTime();
                 rabbitMqEventPublisher.publish(
                         routingKey,
                         message.getPayload(),
@@ -45,6 +44,8 @@ public class OutboxProcessor {
                         message.getCorrelationId(),
                         message.getTraceParent()
                 );
+                farmFlowMetrics.recordOutboxPublishDurationNanos(System.nanoTime() - startNanos);
+
                 outboxService.markProcessed(message.getId());
                 farmFlowMetrics.incrementOutboxPublished();
             } catch (Exception e) {
@@ -55,7 +56,11 @@ public class OutboxProcessor {
         }
     }
 
-    private String resolveRoutingKey(String eventType) {
+    private String resolveRoutingKey(OutboxMessage message) {
+        if (message.getRoutingKey() != null && !message.getRoutingKey().isBlank()) {
+            return message.getRoutingKey();
+        }
+        String eventType = message.getEventType();
         if (eventType == null) {
             return "events.general";
         }
@@ -67,6 +72,9 @@ public class OutboxProcessor {
         }
         if (eventType.contains("Machinery")) {
             return "machinery.maintenance.scheduled";
+        }
+        if (eventType.contains("Activity")) {
+            return "activity.completed";
         }
         return "events.general";
     }
