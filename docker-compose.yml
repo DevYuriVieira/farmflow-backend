@@ -2,13 +2,14 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: farmflow-postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: farmflow
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-farmflow}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,17 +18,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - farmflow-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: farmflow-rabbitmq
-    restart: always
+    restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -36,54 +39,77 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    networks:
+      - farmflow-network
 
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: farmflow-jaeger
-    restart: always
+    restart: unless-stopped
     ports:
       - "16686:16686"
       - "4317:4317"
       - "4318:4318"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - farmflow-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1.0
     container_name: farmflow-keycloak
-    restart: always
+    restart: unless-stopped
     command: start-dev --import-realm
     ports:
-      - "8081:8080"
+      - "${KEYCLOAK_PORT:-8081}:8080"
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HOSTNAME_URL: http://localhost:8081
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+    networks:
+      - farmflow-network
 
   api:
     build: .
     container_name: farmflow-api
-    restart: always
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8080}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/farmflow
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-farmflow}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+    networks:
+      - farmflow-network
 
 volumes:
   postgres_data:
   rabbitmq_data:
+
+networks:
+  farmflow-network:
+    name: farmflow-network
+    driver: bridge

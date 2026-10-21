@@ -35,6 +35,7 @@ build/
 ### Security & Secrets ###
 .env
 .env.*
+!.env.example
 *.secret
 *.key
 *.pem

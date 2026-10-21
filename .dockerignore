@@ -1,0 +1,16 @@
+**/.git
+**/.github
+**/.idea
+**/.vscode
+**/target
+**/target/**
+**/node_modules
+**/*.log
+**/*.tmp
+.env
+.env.*
+docker-compose*.yml
+Dockerfile*
+load-tests
+docs
+tools
