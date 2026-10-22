@@ -1,6 +1,7 @@
 package com.farmflow.specification;
 
 import com.farmflow.entity.Plantation;
+import com.farmflow.enums.PlantationStatus;
 import org.springframework.data.jpa.domain.Specification;
 
 public class PlantationSpecification {
@@ -10,7 +11,7 @@ public class PlantationSpecification {
     }
 
     public static Specification<Plantation> hasStatus(String status) {
-        return (root, query, cb) -> status == null || status.isBlank() ? null : cb.equal(root.get("status"), status);
+        return (root, query, cb) -> status == null || status.isBlank() ? null : cb.equal(root.get("status"), PlantationStatus.fromString(status));
     }
 
     public static Specification<Plantation> hasCrop(String crop) {
