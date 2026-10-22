@@ -69,9 +69,18 @@ public class RabbitMqEventPublisher {
                 throw new AmqpException("Broker rejected message publication (NACK) for messageId=" + messageId
                         + ", reason=" + confirm.getReason());
             }
+            org.springframework.amqp.core.ReturnedMessage returned = correlationData.getReturned();
+            if (returned != null) {
+                log.error("Message was returned by broker as unroutable: messageId={}, replyCode={}, replyText={}, exchange={}, routingKey={}",
+                        messageId, returned.getReplyCode(), returned.getReplyText(), returned.getExchange(), returned.getRoutingKey());
+                throw new AmqpException("Message was unroutable (basic.return): messageId=" + messageId
+                        + ", replyCode=" + returned.getReplyCode() + ", replyText=" + returned.getReplyText());
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AmqpException("Interrupted while awaiting publisher confirm for messageId=" + messageId, e);
+        } catch (AmqpException e) {
+            throw e;
         } catch (Exception e) {
             throw new AmqpException("Publisher confirm timeout or failure for messageId=" + messageId, e);
         }
