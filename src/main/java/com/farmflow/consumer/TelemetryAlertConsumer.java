@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -30,8 +29,8 @@ public class TelemetryAlertConsumer {
     private final MessageDeduplicationService deduplicationService;
     private final ActivityRepository activityRepository;
     private final ObjectMapper objectMapper;
-    private final RabbitTemplate rabbitTemplate;
     private final FarmFlowMetrics farmFlowMetrics;
+    private final AmqpRetryRouter retryRouter;
 
     @RabbitListener(queues = RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE)
     public void handleTelemetryAlert(Message message) {
@@ -50,7 +49,7 @@ public class TelemetryAlertConsumer {
         try {
             if (payload.isBlank() || !payload.startsWith("{")) {
                 log.error("Poison message detected in telemetry queue: id={}. Routing to DLQ.", messageId);
-                routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "MALFORMED_JSON_PAYLOAD");
                 farmFlowMetrics.incrementConsumerFailed("TelemetryAlert");
                 return;
             }
@@ -70,6 +69,10 @@ public class TelemetryAlertConsumer {
 
             farmFlowMetrics.incrementConsumerProcessed("TelemetryAlert");
             log.info("Successfully processed telemetry alert: messageId={} payload={}", messageId, payload);
+        } catch (Exception e) {
+            log.error("Error processing telemetry alert message {}: {}", messageId, e.getMessage(), e);
+            farmFlowMetrics.incrementConsumerFailed("TelemetryAlert");
+            retryRouter.routeFailure(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "telemetry.alerts", e);
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
             MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
@@ -98,13 +101,5 @@ public class TelemetryAlertConsumer {
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply telemetry alert business effect for message " + messageId, e);
         }
-    }
-
-    private void routeToDlq(Message message, String reason) {
-        rabbitTemplate.send(
-                RabbitMqTopologyConfig.DLX_EXCHANGE,
-                "events.dlq",
-                message
-        );
     }
 }

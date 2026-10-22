@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -30,8 +29,8 @@ public class PestScoutingConsumer {
     private final MessageDeduplicationService deduplicationService;
     private final ActivityRepository activityRepository;
     private final ObjectMapper objectMapper;
-    private final RabbitTemplate rabbitTemplate;
     private final FarmFlowMetrics farmFlowMetrics;
+    private final AmqpRetryRouter retryRouter;
 
     @RabbitListener(queues = RabbitMqTopologyConfig.PEST_DETECTED_QUEUE)
     public void handlePestDetected(Message message) {
@@ -50,7 +49,7 @@ public class PestScoutingConsumer {
         try {
             if (payload.isBlank() || !payload.startsWith("{")) {
                 log.error("Poison message detected in pest detected queue: id={}. Routing to DLQ.", messageId);
-                routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "MALFORMED_JSON_PAYLOAD");
                 farmFlowMetrics.incrementConsumerFailed("PestDetected");
                 return;
             }
@@ -70,6 +69,10 @@ public class PestScoutingConsumer {
 
             farmFlowMetrics.incrementConsumerProcessed("PestDetected");
             log.info("Successfully processed pest detected alert: messageId={} payload={}", messageId, payload);
+        } catch (Exception e) {
+            log.error("Error processing pest detected message {}: {}", messageId, e.getMessage(), e);
+            farmFlowMetrics.incrementConsumerFailed("PestDetected");
+            retryRouter.routeFailure(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "pest.detected", e);
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
             MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
@@ -104,13 +107,5 @@ public class PestScoutingConsumer {
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply pest scouting business effect for message " + messageId, e);
         }
-    }
-
-    private void routeToDlq(Message message, String reason) {
-        rabbitTemplate.send(
-                RabbitMqTopologyConfig.DLX_EXCHANGE,
-                "events.dlq",
-                message
-        );
     }
 }
