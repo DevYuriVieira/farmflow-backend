@@ -11,6 +11,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,7 +40,8 @@ public class Machinery extends AuditableEntity {
     @Column(nullable = false, length = 50)
     private MachineryStatus status = MachineryStatus.OPERATIONAL;
 
-    private String nextMaintenanceDate;
+    @Column(name = "next_maintenance_date")
+    private LocalDate nextMaintenanceDate;
 
     @Column(name = "maintenance_reason", length = 255)
     private String maintenanceReason;
@@ -58,7 +60,7 @@ public class Machinery extends AuditableEntity {
             String type,
             Double operatingHours,
             MachineryStatus status,
-            String nextMaintenanceDate,
+            LocalDate nextMaintenanceDate,
             String maintenanceReason,
             Double fuelLevelPercent
     ) {
@@ -104,6 +106,18 @@ public class Machinery extends AuditableEntity {
             this.status = status;
             return this;
         }
+
+        public MachineryBuilder nextMaintenanceDate(String nextMaintenanceDate) {
+            this.nextMaintenanceDate = (nextMaintenanceDate != null && !nextMaintenanceDate.isBlank())
+                    ? LocalDate.parse(nextMaintenanceDate)
+                    : null;
+            return this;
+        }
+
+        public MachineryBuilder nextMaintenanceDate(LocalDate nextMaintenanceDate) {
+            this.nextMaintenanceDate = nextMaintenanceDate;
+            return this;
+        }
     }
 
     public String getStatus() {
@@ -114,6 +128,14 @@ public class Machinery extends AuditableEntity {
         return this.status;
     }
 
+    public String getNextMaintenanceDate() {
+        return this.nextMaintenanceDate != null ? this.nextMaintenanceDate.toString() : null;
+    }
+
+    public LocalDate getNextMaintenanceDateValue() {
+        return this.nextMaintenanceDate;
+    }
+
     public List<Object> pullDomainEvents() {
         List<Object> events = new ArrayList<>(this.domainEvents);
         this.domainEvents.clear();
@@ -121,6 +143,13 @@ public class Machinery extends AuditableEntity {
     }
 
     public void sendToMaintenance(String reason, String expectedDate) {
+        LocalDate parsedDate = (expectedDate != null && !expectedDate.isBlank())
+                ? LocalDate.parse(expectedDate)
+                : null;
+        sendToMaintenance(reason, parsedDate);
+    }
+
+    public void sendToMaintenance(String reason, LocalDate expectedDate) {
         if (this.status == MachineryStatus.MAINTENANCE) {
             throw new InvalidMachineryStateException("Machinery is already under maintenance.");
         }
@@ -129,10 +158,10 @@ public class Machinery extends AuditableEntity {
         }
         this.status = MachineryStatus.MAINTENANCE;
         this.maintenanceReason = (reason != null && !reason.isBlank()) ? reason : "Scheduled maintenance";
-        if (expectedDate != null && !expectedDate.isBlank()) {
+        if (expectedDate != null) {
             this.nextMaintenanceDate = expectedDate;
         }
-        this.domainEvents.add(new MachineryMaintenanceScheduledEvent(this, this.maintenanceReason, this.nextMaintenanceDate));
+        this.domainEvents.add(new MachineryMaintenanceScheduledEvent(this, this.maintenanceReason, getNextMaintenanceDate()));
     }
 
     public void returnFromMaintenance(Double newOperatingHours) {
@@ -190,8 +219,14 @@ public class Machinery extends AuditableEntity {
         }
     }
 
-    public void scheduleNextMaintenance(String expectedDate) {
+    public void scheduleNextMaintenance(LocalDate expectedDate) {
         this.nextMaintenanceDate = expectedDate;
+    }
+
+    public void scheduleNextMaintenance(String expectedDate) {
+        this.nextMaintenanceDate = (expectedDate != null && !expectedDate.isBlank())
+                ? LocalDate.parse(expectedDate)
+                : null;
     }
 
     public void deactivate() {

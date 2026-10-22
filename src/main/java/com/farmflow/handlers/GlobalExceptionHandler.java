@@ -12,6 +12,7 @@ import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -22,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -47,6 +49,33 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Business Rule Violation");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    @ExceptionHandler(DateTimeParseException.class)
+    public ProblemDetail handleDateTimeParseException(DateTimeParseException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Invalid date format: '" + ex.getParsedString() + "'. Expected format is YYYY-MM-DD (ISO-8601)."
+        );
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Invalid Date Format");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleHttpMessageNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        String detail = "Malformed JSON request body or unparseable field format.";
+        if (ex.getCause() instanceof DateTimeParseException parseEx) {
+            detail = "Invalid date format: '" + parseEx.getParsedString() + "'. Expected format is YYYY-MM-DD (ISO-8601).";
+        }
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Malformed Request Body");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
         return problem;

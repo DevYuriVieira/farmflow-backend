@@ -8,6 +8,8 @@ import com.farmflow.exceptions.BusinessException;
 import com.farmflow.exceptions.InvalidMachineryStateException;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -292,5 +294,78 @@ class MachineryDomainTest {
         machinery.activate();
         assertEquals("OPERATIONAL", machinery.getStatus());
         assertEquals(MachineryStatus.OPERATIONAL, machinery.getMachineryStatus());
+    }
+
+    @Test
+    void shouldHandleNextMaintenanceDateAsTypedLocalDateAndStringCompatibility() {
+        LocalDate expectedDate = LocalDate.of(2026, 12, 25);
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Colheitadeira de Graos")
+                .model("S790")
+                .type("HARVESTER")
+                .nextMaintenanceDate(expectedDate)
+                .build();
+
+        assertEquals(expectedDate, machinery.getNextMaintenanceDateValue());
+        assertEquals("2026-12-25", machinery.getNextMaintenanceDate());
+
+        machinery.scheduleNextMaintenance(LocalDate.of(2027, 1, 15));
+        assertEquals(LocalDate.of(2027, 1, 15), machinery.getNextMaintenanceDateValue());
+        assertEquals("2027-01-15", machinery.getNextMaintenanceDate());
+
+        machinery.scheduleNextMaintenance("2027-03-01");
+        assertEquals(LocalDate.of(2027, 3, 1), machinery.getNextMaintenanceDateValue());
+        assertEquals("2027-03-01", machinery.getNextMaintenanceDate());
+
+        machinery.scheduleNextMaintenance((String) null);
+        assertNull(machinery.getNextMaintenanceDateValue());
+        assertNull(machinery.getNextMaintenanceDate());
+    }
+
+    @Test
+    void shouldSupportSendToMaintenanceWithTypedLocalDate() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator Agrale")
+                .model("7215")
+                .type("TRACTOR")
+                .build();
+
+        LocalDate maintenanceDate = LocalDate.of(2026, 11, 20);
+        machinery.sendToMaintenance("Substituição de embreagem", maintenanceDate);
+
+        assertEquals(MachineryStatus.MAINTENANCE, machinery.getMachineryStatus());
+        assertEquals(maintenanceDate, machinery.getNextMaintenanceDateValue());
+        assertEquals("2026-11-20", machinery.getNextMaintenanceDate());
+        assertEquals("Substituição de embreagem", machinery.getMaintenanceReason());
+    }
+
+    @Test
+    void shouldThrowDateTimeParseExceptionOnMalformedDateString() {
+        assertThrows(DateTimeParseException.class, () ->
+                Machinery.builder()
+                        .farmId("farm-001")
+                        .name("Trator")
+                        .model("M1")
+                        .type("T1")
+                        .nextMaintenanceDate("25-12-2026")
+                        .build()
+        );
+
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator")
+                .model("M1")
+                .type("T1")
+                .build();
+
+        assertThrows(DateTimeParseException.class, () ->
+                machinery.sendToMaintenance("Manutenção", "data-invalida")
+        );
+
+        assertThrows(DateTimeParseException.class, () ->
+                machinery.scheduleNextMaintenance("2026/12/31")
+        );
     }
 }
