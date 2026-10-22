@@ -153,10 +153,14 @@ public class OutboxService {
     }
 
     public String resolveRoutingKey(String eventType) {
-        if (eventType == null) {
-            return "events.general";
+        if (eventType == null || eventType.isBlank()) {
+            throw new IllegalArgumentException("eventType cannot be null or blank");
         }
-        return ROUTING_KEY_CATALOG.getOrDefault(eventType, "events.general");
+        String routingKey = ROUTING_KEY_CATALOG.get(eventType);
+        if (routingKey == null) {
+            throw new IllegalArgumentException("Unknown domain event type for outbox routing: " + eventType);
+        }
+        return routingKey;
     }
 
     private long calculateExponentialBackoff(int attempt) {

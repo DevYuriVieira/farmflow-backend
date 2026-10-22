@@ -116,8 +116,8 @@ public class OutboxProcessor {
             return message.getRoutingKey();
         }
         String eventType = message.getEventType();
-        if (eventType == null) {
-            return "events.general";
+        if (eventType == null || eventType.isBlank()) {
+            throw new IllegalArgumentException("Cannot resolve routing key: eventType is null or blank for message id=" + message.getId());
         }
         if (eventType.contains("Telemetry")) {
             return "telemetry.alert.critical";
@@ -131,6 +131,6 @@ public class OutboxProcessor {
         if (eventType.contains("Activity")) {
             return "activity.completed";
         }
-        return "events.general";
+        throw new IllegalArgumentException("Cannot resolve routing key for unknown outbox event type: " + eventType);
     }
 }

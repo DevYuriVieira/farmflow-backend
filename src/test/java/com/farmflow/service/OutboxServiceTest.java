@@ -187,4 +187,23 @@ class OutboxServiceTest {
         verify(farmFlowMetrics, times(1)).recordOutboxPublishDurationNanos(anyLong());
         verify(farmFlowMetrics, times(1)).incrementOutboxPublished();
     }
+
+    @Test
+    void shouldResolveRoutingKeysForKnownEvents() {
+        assertEquals("telemetry.alert.critical", outboxService.resolveRoutingKey("TelemetryAlert"));
+        assertEquals("telemetry.alert.critical", outboxService.resolveRoutingKey("TelemetryAlertEvent"));
+        assertEquals("pest.detected.warning", outboxService.resolveRoutingKey("PestDetected"));
+        assertEquals("pest.detected.warning", outboxService.resolveRoutingKey("PestDetectedEvent"));
+        assertEquals("machinery.maintenance.scheduled", outboxService.resolveRoutingKey("MachineryMaintenanceScheduled"));
+        assertEquals("machinery.maintenance.hours", outboxService.resolveRoutingKey("MachineryOperatingHoursUpdated"));
+        assertEquals("activity.completed", outboxService.resolveRoutingKey("ActivityCompleted"));
+        assertEquals("activity.completed", outboxService.resolveRoutingKey("ActivityCompletedEvent"));
+    }
+
+    @Test
+    void shouldThrowIllegalArgumentExceptionForUnknownOrNullEventType() {
+        assertThrows(IllegalArgumentException.class, () -> outboxService.resolveRoutingKey("UnknownEvent"));
+        assertThrows(IllegalArgumentException.class, () -> outboxService.resolveRoutingKey(null));
+        assertThrows(IllegalArgumentException.class, () -> outboxService.resolveRoutingKey("   "));
+    }
 }
