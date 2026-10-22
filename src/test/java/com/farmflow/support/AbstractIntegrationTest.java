@@ -33,8 +33,15 @@ public abstract class AbstractIntegrationTest {
 
     private static boolean isDockerAvailable() {
         try {
-            return DockerClientFactory.instance().isDockerAvailable();
+            boolean available = DockerClientFactory.instance().isDockerAvailable();
+            if (!available && "true".equalsIgnoreCase(System.getenv("CI"))) {
+                throw new IllegalStateException("Critical CI failure: Docker daemon is not available on CI runner for Testcontainers.");
+            }
+            return available;
         } catch (Throwable t) {
+            if ("true".equalsIgnoreCase(System.getenv("CI"))) {
+                throw new IllegalStateException("Critical CI failure: Docker daemon is not available on CI runner for Testcontainers.", t);
+            }
             return false;
         }
     }
