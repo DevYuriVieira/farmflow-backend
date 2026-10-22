@@ -54,6 +54,40 @@ public class MachineryController {
         machineryService.deleteMachinery(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/maintenance")
+    public ResponseEntity<Machinery> sendToMaintenance(
+        @PathVariable String id,
+        @RequestBody(required = false) SendToMaintenanceRequest request
+    ) {
+        return ResponseEntity.ok(machineryService.sendToMaintenance(id, request));
+    }
+
+    @PostMapping("/{id}/return-from-maintenance")
+    public ResponseEntity<Machinery> returnFromMaintenance(
+        @PathVariable String id,
+        @RequestBody(required = false) ReturnFromMaintenanceRequest request
+    ) {
+        return ResponseEntity.ok(machineryService.returnFromMaintenance(id, request));
+    }
+
+    @PostMapping("/{id}/operating-hours")
+    public ResponseEntity<Machinery> updateOperatingHours(
+        @PathVariable String id,
+        @RequestBody UpdateOperatingHoursRequest request
+    ) {
+        return ResponseEntity.ok(machineryService.updateOperatingHours(id, request));
+    }
+
+    @PostMapping("/{id}/deactivate")
+    public ResponseEntity<Machinery> deactivate(@PathVariable String id) {
+        return ResponseEntity.ok(machineryService.deactivate(id));
+    }
+
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Machinery> activate(@PathVariable String id) {
+        return ResponseEntity.ok(machineryService.activate(id));
+    }
 }
 
 

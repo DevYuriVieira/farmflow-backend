@@ -2,7 +2,7 @@ package com.farmflow.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.farmflow.config.JwtTokenProvider;
-import com.farmflow.dto.MachineryDtos.CreateMachineryRequest;
+import com.farmflow.dto.MachineryDtos.*;
 import com.farmflow.entity.Machinery;
 import com.farmflow.repository.MachineryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,5 +89,90 @@ class MachineryControllerTest extends AbstractIntegrationTest {
                 .header("Authorization", validJwtToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Colheitadeira S700"));
+    }
+
+    @Test
+    void shouldSendMachineryToMaintenanceSuccessfully() throws Exception {
+        var machinery = machineryRepository.save(Machinery.builder()
+                .farmId("farm-123")
+                .name("Trator 7M")
+                .model("7M 230")
+                .type("Trator")
+                .build());
+
+        var request = new SendToMaintenanceRequest("Troca de óleo preventiva", "2026-11-15");
+
+        mockMvc.perform(post("/machinery/" + machinery.getId() + "/maintenance")
+                .header("Authorization", validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("MAINTENANCE"))
+                .andExpect(jsonPath("$.maintenanceReason").value("Troca de óleo preventiva"));
+    }
+
+    @Test
+    void shouldReturnConflictWhenSendingAlreadyInMaintenanceMachineryToMaintenance() throws Exception {
+        var machinery = machineryRepository.save(Machinery.builder()
+                .farmId("farm-123")
+                .name("Pulverizador M4040")
+                .model("M4040")
+                .type("Pulverizador")
+                .build());
+        machinery.sendToMaintenance("Initial repair", "2026-11-20");
+        machineryRepository.save(machinery);
+
+        var request = new SendToMaintenanceRequest("Reparo redundante", "2026-11-25");
+
+        mockMvc.perform(post("/machinery/" + machinery.getId() + "/maintenance")
+                .header("Authorization", validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Invalid Machinery State Transition"))
+                .andExpect(jsonPath("$.detail").value("Machinery is already under maintenance."));
+    }
+
+    @Test
+    void shouldReturnMachineryFromMaintenanceSuccessfully() throws Exception {
+        var machinery = machineryRepository.save(Machinery.builder()
+                .farmId("farm-123")
+                .name("Colheitadeira X9")
+                .model("X9 1000")
+                .type("Colheitadeira")
+                .operatingHours(50.0)
+                .build());
+        machinery.sendToMaintenance("Ajuste de esteira", "2026-11-10");
+        machineryRepository.save(machinery);
+
+        var request = new ReturnFromMaintenanceRequest(55.0);
+
+        mockMvc.perform(post("/machinery/" + machinery.getId() + "/return-from-maintenance")
+                .header("Authorization", validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OPERATIONAL"))
+                .andExpect(jsonPath("$.operatingHours").value(55.0));
+    }
+
+    @Test
+    void shouldUpdateOperatingHoursSuccessfully() throws Exception {
+        var machinery = machineryRepository.save(Machinery.builder()
+                .farmId("farm-123")
+                .name("Trator 6M")
+                .model("6135M")
+                .type("Trator")
+                .operatingHours(100.0)
+                .build());
+
+        var request = new UpdateOperatingHoursRequest(125.0);
+
+        mockMvc.perform(post("/machinery/" + machinery.getId() + "/operating-hours")
+                .header("Authorization", validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operatingHours").value(125.0));
     }
 }
