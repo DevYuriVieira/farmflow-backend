@@ -40,12 +40,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        if (uri == null) {
+        String path = resolvePath(request);
+        if (path.isEmpty()) {
             return false;
         }
         for (String exempt : EXEMPT_PREFIXES) {
-            if (uri.startsWith(exempt)) {
+            if (path.equals(exempt) || path.startsWith(exempt + "/")) {
                 return true;
             }
         }
@@ -60,7 +60,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String clientIp = resolveClientIp(request);
         String uri = request.getRequestURI();
-        boolean isAuthRoute = uri != null && uri.startsWith("/auth");
+        String path = resolvePath(request);
+        boolean isAuthRoute = path.equals("/auth") || path.startsWith("/auth/");
         int maxRequests = isAuthRoute ? AUTH_MAX_REQUESTS_PER_MINUTE : DEFAULT_MAX_REQUESTS_PER_MINUTE;
         String bucketKey = clientIp + (isAuthRoute ? ":auth" : ":general");
 
@@ -128,6 +129,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (buckets.size() > MAX_CACHE_SIZE) {
             buckets.entrySet().removeIf(entry -> entry.getValue().window() < currentWindow - 1);
         }
+    }
+
+    String resolvePath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri == null) {
+            return "";
+        }
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isBlank() && uri.startsWith(contextPath)) {
+            String stripped = uri.substring(contextPath.length());
+            return stripped.startsWith("/") ? stripped : "/" + stripped;
+        }
+        return uri;
     }
 
     String resolveClientIp(HttpServletRequest request) {

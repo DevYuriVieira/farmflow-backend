@@ -114,6 +114,59 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void shouldBypassRateLimitOnHealthCheckWithContextPath() {
+        MockHttpServletRequest healthReq = new MockHttpServletRequest();
+        healthReq.setContextPath("/v1");
+        healthReq.setRequestURI("/v1/health");
+        assertTrue(filter.shouldNotFilter(healthReq));
+
+        MockHttpServletRequest actuatorReq = new MockHttpServletRequest();
+        actuatorReq.setContextPath("/v1");
+        actuatorReq.setRequestURI("/v1/actuator/health/readiness");
+        assertTrue(filter.shouldNotFilter(actuatorReq));
+    }
+
+    @Test
+    void shouldEnforceAuthLimitWithContextPath() throws ServletException, IOException {
+        String clientIp = "198.51.100.35";
+
+        for (int i = 0; i < 15; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest();
+            req.setContextPath("/v1");
+            req.setRemoteAddr(clientIp);
+            req.setRequestURI("/v1/auth/login");
+            MockHttpServletResponse res = new MockHttpServletResponse();
+            filter.doFilterInternal(req, res, filterChain);
+            assertEquals(HttpStatus.OK.value(), res.getStatus());
+        }
+
+        MockHttpServletRequest blockedReq = new MockHttpServletRequest();
+        blockedReq.setContextPath("/v1");
+        blockedReq.setRemoteAddr(clientIp);
+        blockedReq.setRequestURI("/v1/auth/login");
+        MockHttpServletResponse blockedRes = new MockHttpServletResponse();
+
+        filter.doFilterInternal(blockedReq, blockedRes, filterChain);
+
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), blockedRes.getStatus());
+        assertEquals("15", blockedRes.getHeader("X-RateLimit-Limit"));
+        assertEquals("0", blockedRes.getHeader("X-RateLimit-Remaining"));
+    }
+
+    @Test
+    void shouldNotTreatPrefixCollisionsAsAuthRoute() throws ServletException, IOException {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRemoteAddr("198.51.100.40");
+        req.setRequestURI("/authorities");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilterInternal(req, res, filterChain);
+
+        assertEquals(HttpStatus.OK.value(), res.getStatus());
+        assertEquals("60", res.getHeader("X-RateLimit-Limit"));
+    }
+
+    @Test
     void shouldIgnoreXForwardedForWhenDirectClientIsUntrusted() {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setRemoteAddr("203.0.113.50");
