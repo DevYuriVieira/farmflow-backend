@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Component
+@org.springframework.context.annotation.Profile({"dev", "local"})
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
