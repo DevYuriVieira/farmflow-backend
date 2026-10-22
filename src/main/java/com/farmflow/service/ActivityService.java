@@ -8,7 +8,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.List;
 import com.farmflow.dto.PageResponse;
 import com.farmflow.specification.ActivitySpecification;
@@ -63,18 +62,19 @@ public class ActivityService {
     public FarmActivity updateActivity(String id, UpdateActivityRequest request) {
         FarmActivity activity = getActivityById(id);
 
-        if (request.title() != null) activity.setTitle(request.title());
-        if (request.type() != null) activity.setType(request.type());
-        if (request.date() != null) activity.setDate(request.date());
-        if (request.priority() != null) activity.setPriority(request.priority());
-        if (request.notes() != null) activity.setNotes(request.notes());
-        if (request.costEstimate() != null) activity.setCostEstimate(request.costEstimate());
+        activity.updateDetails(
+            request.title(),
+            request.type(),
+            request.date(),
+            request.priority(),
+            request.notes(),
+            request.costEstimate()
+        );
         if (request.completed() != null) {
-            activity.setCompleted(request.completed());
             if (Boolean.TRUE.equals(request.completed())) {
-                activity.setCompletedAt(Instant.now().toString());
+                activity.complete();
             } else {
-                activity.setCompletedAt(null);
+                activity.reopen();
             }
         }
 
@@ -90,8 +90,11 @@ public class ActivityService {
     @Transactional
     public FarmActivity toggleStatus(String id, boolean completed) {
         FarmActivity activity = getActivityById(id);
-        activity.setCompleted(completed);
-        activity.setCompletedAt(completed ? Instant.now().toString() : null);
+        if (completed) {
+            activity.complete();
+        } else {
+            activity.reopen();
+        }
         FarmActivity saved = activityRepository.save(activity);
         if (completed) {
             ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
