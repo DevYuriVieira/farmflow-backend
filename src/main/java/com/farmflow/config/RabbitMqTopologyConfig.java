@@ -17,9 +17,13 @@ public class RabbitMqTopologyConfig {
     public static final String MAIN_EXCHANGE = "farmflow.events";
     public static final String DLX_EXCHANGE = "farmflow.events.dlx";
 
+    public static final String UNROUTABLE_EXCHANGE = "farmflow.unroutable.exchange";
+    public static final String UNROUTABLE_QUEUE = "farmflow.unroutable.queue";
+
     public static final String TELEMETRY_ALERTS_QUEUE = "farmflow.telemetry.alerts";
     public static final String PEST_DETECTED_QUEUE = "farmflow.pest.detected";
     public static final String MACHINERY_MAINTENANCE_QUEUE = "farmflow.machinery.maintenance";
+    public static final String ACTIVITY_COMPLETED_QUEUE = "farmflow.activity.completed";
 
     public static final String RETRY_10S_QUEUE = "farmflow.events.retry.10s";
     public static final String RETRY_30S_QUEUE = "farmflow.events.retry.30s";
@@ -30,10 +34,28 @@ public class RabbitMqTopologyConfig {
     public static final String ROUTING_TELEMETRY_RETRY_RETURN = "telemetry.alerts.#";
     public static final String ROUTING_PEST = "pest.detected.#";
     public static final String ROUTING_MACHINERY = "machinery.maintenance.#";
+    public static final String ROUTING_ACTIVITY = "activity.#";
+
+    @Bean
+    public FanoutExchange unroutableExchange() {
+        return new FanoutExchange(UNROUTABLE_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue unroutableQueue() {
+        return new Queue(UNROUTABLE_QUEUE, true, false, false);
+    }
+
+    @Bean
+    public Binding unroutableBinding(Queue unroutableQueue, FanoutExchange unroutableExchange) {
+        return BindingBuilder.bind(unroutableQueue).to(unroutableExchange);
+    }
 
     @Bean
     public TopicExchange mainExchange() {
-        return new TopicExchange(MAIN_EXCHANGE, true, false);
+        Map<String, Object> args = new HashMap<>();
+        args.put("alternate-exchange", UNROUTABLE_EXCHANGE);
+        return new TopicExchange(MAIN_EXCHANGE, true, false, args);
     }
 
     @Bean
@@ -63,6 +85,14 @@ public class RabbitMqTopologyConfig {
         args.put("x-dead-letter-exchange", DLX_EXCHANGE);
         args.put("x-dead-letter-routing-key", "machinery.maintenance.retry.10s");
         return new Queue(MACHINERY_MAINTENANCE_QUEUE, true, false, false, args);
+    }
+
+    @Bean
+    public Queue activityCompletedQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "activity.completed.retry.10s");
+        return new Queue(ACTIVITY_COMPLETED_QUEUE, true, false, false, args);
     }
 
     @Bean
@@ -115,6 +145,11 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding activityBinding(Queue activityCompletedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(activityCompletedQueue).to(mainExchange).with(ROUTING_ACTIVITY);
+    }
+
+    @Bean
     public Binding retry10sBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("telemetry.alerts.retry.10s");
     }
@@ -127,6 +162,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry10sMachineryBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("machinery.maintenance.retry.10s");
+    }
+
+    @Bean
+    public Binding retry10sActivityBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("activity.completed.retry.10s");
     }
 
     @Bean
@@ -145,6 +185,11 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding retry30sActivityBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("activity.completed.retry.30s");
+    }
+
+    @Bean
     public Binding retry90sBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("telemetry.alerts.retry.90s");
     }
@@ -157,6 +202,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry90sMachineryBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("machinery.maintenance.retry.90s");
+    }
+
+    @Bean
+    public Binding retry90sActivityBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("activity.completed.retry.90s");
     }
 
     @Bean
