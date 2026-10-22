@@ -59,9 +59,10 @@ public class ArchitectureRulesTest {
             .should().beAnnotatedWith(Service.class);
 
     @ArchTest
-    static final ArchRule machineryShouldNotHavePublicSetters =
+    static final ArchRule domainAggregatesShouldNotHavePublicSetters =
         classes()
             .that().haveSimpleName("Machinery")
+            .or().haveSimpleName("Plantation")
             .should(new ArchCondition<JavaClass>("not declare public setter methods") {
                 @Override
                 public void check(JavaClass item, ConditionEvents events) {
