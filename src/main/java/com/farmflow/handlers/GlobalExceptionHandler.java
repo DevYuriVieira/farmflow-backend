@@ -2,6 +2,7 @@ package com.farmflow.handlers;
 
 import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.exceptions.BusinessException;
+import com.farmflow.exceptions.InvalidMachineryStateException;
 import com.farmflow.exceptions.ResourceNotFoundException;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,6 +47,16 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setType(DEFAULT_TYPE);
         problem.setTitle("Business Rule Violation");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        enrichProblemDetail(problem);
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidMachineryStateException.class)
+    public ProblemDetail handleInvalidMachineryState(InvalidMachineryStateException ex, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setType(DEFAULT_TYPE);
+        problem.setTitle("Invalid Machinery State Transition");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
         return problem;
