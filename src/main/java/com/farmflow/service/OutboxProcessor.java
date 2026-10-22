@@ -27,7 +27,10 @@ public class OutboxProcessor {
     private volatile long circuitOpenUntilTimestamp = 0;
     private final Semaphore relayBulkhead = new Semaphore(1);
 
-    @Scheduled(fixedDelayString = "${farmflow.outbox.interval-ms:2000}")
+    @Scheduled(
+            fixedDelayString = "${farmflow.outbox.interval-ms:2000}",
+            initialDelayString = "${farmflow.outbox.initial-delay-ms:2000}"
+    )
     public void processOutboxMessages() {
         if (System.currentTimeMillis() < circuitOpenUntilTimestamp) {
             return;
