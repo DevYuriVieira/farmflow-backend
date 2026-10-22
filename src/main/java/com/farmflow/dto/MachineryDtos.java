@@ -32,6 +32,19 @@ public class MachineryDtos {
         String nextMaintenanceDate,
         Double fuelLevelPercent
     ) {}
+
+    public record SendToMaintenanceRequest(
+        String reason,
+        String expectedDate
+    ) {}
+
+    public record ReturnFromMaintenanceRequest(
+        Double newOperatingHours
+    ) {}
+
+    public record UpdateOperatingHoursRequest(
+        Double operatingHours
+    ) {}
 }
 
 

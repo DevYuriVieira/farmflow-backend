@@ -1,7 +1,6 @@
 package com.farmflow.service;
 
-import com.farmflow.dto.MachineryDtos.CreateMachineryRequest;
-import com.farmflow.dto.MachineryDtos.UpdateMachineryRequest;
+import com.farmflow.dto.MachineryDtos.*;
 import com.farmflow.entity.Machinery;
 import com.farmflow.enums.MachineryStatus;
 import com.farmflow.event.MachineryMaintenanceScheduledEvent;
@@ -101,6 +100,62 @@ public class MachineryService {
     public void deleteMachinery(String id) {
         Machinery machinery = getMachineryById(id);
         machineryRepository.delete(machinery);
+    }
+
+    @Transactional
+    public Machinery sendToMaintenance(String id, SendToMaintenanceRequest request) {
+        Machinery machinery = getMachineryById(id);
+        machinery.sendToMaintenance(
+            request != null ? request.reason() : null,
+            request != null ? request.expectedDate() : null
+        );
+        machinery.setUpdatedAt(Instant.now());
+        Machinery saved = machineryRepository.save(machinery);
+        dispatchDomainEvents(saved);
+        return saved;
+    }
+
+    @Transactional
+    public Machinery returnFromMaintenance(String id, ReturnFromMaintenanceRequest request) {
+        Machinery machinery = getMachineryById(id);
+        machinery.returnFromMaintenance(request != null ? request.newOperatingHours() : null);
+        machinery.setUpdatedAt(Instant.now());
+        Machinery saved = machineryRepository.save(machinery);
+        dispatchDomainEvents(saved);
+        return saved;
+    }
+
+    @Transactional
+    public Machinery updateOperatingHours(String id, UpdateOperatingHoursRequest request) {
+        Machinery machinery = getMachineryById(id);
+        if (request != null && request.operatingHours() != null) {
+            machinery.updateOperatingHours(request.operatingHours());
+            machinery.setUpdatedAt(Instant.now());
+            Machinery saved = machineryRepository.save(machinery);
+            dispatchDomainEvents(saved);
+            return saved;
+        }
+        return machinery;
+    }
+
+    @Transactional
+    public Machinery deactivate(String id) {
+        Machinery machinery = getMachineryById(id);
+        machinery.deactivate();
+        machinery.setUpdatedAt(Instant.now());
+        Machinery saved = machineryRepository.save(machinery);
+        dispatchDomainEvents(saved);
+        return saved;
+    }
+
+    @Transactional
+    public Machinery activate(String id) {
+        Machinery machinery = getMachineryById(id);
+        machinery.activate();
+        machinery.setUpdatedAt(Instant.now());
+        Machinery saved = machineryRepository.save(machinery);
+        dispatchDomainEvents(saved);
+        return saved;
     }
 
     private void dispatchDomainEvents(Machinery machinery) {
