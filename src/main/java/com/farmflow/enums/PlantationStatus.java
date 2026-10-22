@@ -6,7 +6,34 @@ public enum PlantationStatus {
     GROWING,
     HARVESTING,
     COMPLETED,
-    FAILED
+    FAILED;
+
+    public boolean canTransitionTo(PlantationStatus next) {
+        if (this == next) {
+            return true;
+        }
+        if (next == FAILED) {
+            return true;
+        }
+        return switch (this) {
+            case PLANNING -> next == PLANTED;
+            case PLANTED -> next == GROWING;
+            case GROWING -> next == HARVESTING;
+            case HARVESTING -> next == COMPLETED;
+            case COMPLETED, FAILED -> false;
+        };
+    }
+
+    public static PlantationStatus fromString(String value) {
+        if (value == null || value.isBlank()) {
+            return PLANTED;
+        }
+        try {
+            return PlantationStatus.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return PLANTED;
+        }
+    }
 }
 
 
