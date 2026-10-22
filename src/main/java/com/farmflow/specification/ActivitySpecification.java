@@ -1,6 +1,7 @@
 package com.farmflow.specification;
 
 import com.farmflow.entity.FarmActivity;
+import com.farmflow.enums.ActivityType;
 import org.springframework.data.jpa.domain.Specification;
 
 public class ActivitySpecification {
@@ -18,6 +19,10 @@ public class ActivitySpecification {
     }
 
     public static Specification<FarmActivity> hasType(String type) {
-        return (root, query, cb) -> type == null || type.isBlank() ? null : cb.equal(cb.lower(root.get("type")), type.toLowerCase());
+        return (root, query, cb) -> type == null || type.isBlank() ? null : cb.equal(root.get("type"), ActivityType.fromString(type));
+    }
+
+    public static Specification<FarmActivity> hasType(ActivityType type) {
+        return (root, query, cb) -> type == null ? null : cb.equal(root.get("type"), type);
     }
 }
