@@ -1,18 +1,19 @@
 package com.farmflow.service;
 
-import com.farmflow.entity.Plantation;
+import com.farmflow.dto.PageResponse;
 import com.farmflow.dto.PlantationDtos.*;
+import com.farmflow.entity.Plantation;
+import com.farmflow.enums.PlantationStatus;
 import com.farmflow.repository.PlantationRepository;
+import com.farmflow.specification.PlantationSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import com.farmflow.dto.PageResponse;
-import com.farmflow.specification.PlantationSpecification;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @RequiredArgsConstructor
@@ -21,8 +22,8 @@ public class PlantationService {
     private final PlantationRepository plantationRepository;
 
     public List<Plantation> getPlantations(String farmId, String status) {
-        if (farmId != null && status != null) {
-            return plantationRepository.findByFarmIdAndStatus(farmId, status);
+        if (farmId != null && status != null && !status.isBlank()) {
+            return plantationRepository.findByFarmIdAndStatus(farmId, PlantationStatus.fromString(status));
         } else if (farmId != null) {
             return plantationRepository.findByFarmId(farmId);
         }
@@ -54,15 +55,20 @@ public class PlantationService {
     public Plantation updatePlantation(String id, UpdatePlantationRequest request) {
         Plantation plantation = getPlantationById(id);
 
-        if (request.name() != null) plantation.setName(request.name());
-        if (request.crop() != null) plantation.setCrop(request.crop());
-        if (request.variety() != null) plantation.setVariety(request.variety());
-        if (request.areaHectares() != null) plantation.setAreaHectares(request.areaHectares());
-        if (request.status() != null) plantation.setStatus(request.status());
-        if (request.plantingDate() != null) plantation.setPlantingDate(request.plantingDate());
-        if (request.harvestEstimateDate() != null) plantation.setHarvestEstimateDate(request.harvestEstimateDate());
-        if (request.expectedYieldTons() != null) plantation.setExpectedYieldTons(request.expectedYieldTons());
-        if (request.notes() != null) plantation.setNotes(request.notes());
+        plantation.updateDetails(
+            request.name(),
+            request.crop(),
+            request.variety(),
+            request.areaHectares(),
+            request.plantingDate(),
+            request.harvestEstimateDate(),
+            request.expectedYieldTons(),
+            request.notes()
+        );
+
+        if (request.status() != null && !request.status().isBlank()) {
+            plantation.transitionStatus(request.status());
+        }
 
         return plantationRepository.save(plantation);
     }
