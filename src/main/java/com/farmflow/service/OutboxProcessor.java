@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 @Component
 @RequiredArgsConstructor
@@ -24,6 +25,7 @@ public class OutboxProcessor {
     private final RabbitMqEventPublisher rabbitMqEventPublisher;
     private final FarmFlowMetrics farmFlowMetrics;
     private volatile long circuitOpenUntilTimestamp = 0;
+    private final Semaphore relayBulkhead = new Semaphore(1);
 
     @Scheduled(fixedDelayString = "${farmflow.outbox.interval-ms:2000}")
     public void processOutboxMessages() {
@@ -31,40 +33,53 @@ public class OutboxProcessor {
             return;
         }
 
-        List<OutboxMessage> messages = outboxService.fetchUnprocessedBatch(MAX_ATTEMPTS, BATCH_SIZE);
-        if (messages.isEmpty()) {
+        if (!relayBulkhead.tryAcquire()) {
+            log.debug("Outbox relay processing already in progress. Skipping overlapping schedule execution.");
             return;
         }
 
-        for (OutboxMessage message : messages) {
-            try {
-                localEventPublisher.publishEvent(message);
-                String routingKey = resolveRoutingKey(message);
+        try {
+            List<OutboxMessage> messages = outboxService.fetchUnprocessedBatch(MAX_ATTEMPTS, BATCH_SIZE);
+            if (messages.isEmpty()) {
+                return;
+            }
 
-                long startNanos = System.nanoTime();
-                rabbitMqEventPublisher.publish(
-                        routingKey,
-                        message.getPayload(),
-                        message.getId(),
-                        message.getCorrelationId(),
-                        message.getTraceParent()
-                );
-                farmFlowMetrics.recordOutboxPublishDurationNanos(System.nanoTime() - startNanos);
+            for (OutboxMessage message : messages) {
+                try {
+                    localEventPublisher.publishEvent(message);
+                    String routingKey = resolveRoutingKey(message);
 
-                outboxService.markProcessed(message.getId());
-                farmFlowMetrics.incrementOutboxPublished();
-            } catch (Exception e) {
-                log.error("Failed to process outbox message id={}", message.getId(), e);
-                outboxService.markFailed(message.getId(), e.getMessage());
-                farmFlowMetrics.incrementOutboxFailed();
+                    long startNanos = System.nanoTime();
+                    rabbitMqEventPublisher.publish(
+                            routingKey,
+                            message.getPayload(),
+                            message.getId(),
+                            message.getCorrelationId(),
+                            message.getTraceParent()
+                    );
+                    farmFlowMetrics.recordOutboxPublishDurationNanos(System.nanoTime() - startNanos);
 
-                if (isBrokerConnectivityException(e)) {
-                    log.warn("Broker connectivity failure detected. Halting batch and tripping relay circuit breaker for 5000ms.");
-                    tripCircuitBreaker(5000);
-                    break;
+                    outboxService.markProcessed(message.getId());
+                    farmFlowMetrics.incrementOutboxPublished();
+                } catch (Exception e) {
+                    log.error("Failed to process outbox message id={}", message.getId(), e);
+                    outboxService.markFailed(message.getId(), e.getMessage());
+                    farmFlowMetrics.incrementOutboxFailed();
+
+                    if (isBrokerConnectivityException(e)) {
+                        log.warn("Broker connectivity failure detected. Halting batch and tripping relay circuit breaker for 5000ms.");
+                        tripCircuitBreaker(5000);
+                        break;
+                    }
                 }
             }
+        } finally {
+            relayBulkhead.release();
         }
+    }
+
+    public boolean isRelayBusy() {
+        return relayBulkhead.availablePermits() == 0;
     }
 
     public boolean isCircuitOpen() {

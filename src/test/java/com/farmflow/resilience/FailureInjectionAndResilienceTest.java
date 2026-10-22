@@ -148,4 +148,40 @@ class FailureInjectionAndResilienceTest {
         assertEquals("HEALTHY", ((Map<?, ?>) response.getBody().get("dependencies")).get("database"));
         assertEquals("UNHEALTHY", ((Map<?, ?>) response.getBody().get("dependencies")).get("rabbitmq"));
     }
+
+    @Test
+    void shouldPreventOverlappingRelayExecutionWhenBulkheadIsAcquired() throws Exception {
+        OutboxMessage msg = OutboxMessage.builder()
+                .id("msg-slow")
+                .eventType("TelemetryAlert")
+                .payload("{}")
+                .occurredOn(Instant.now())
+                .attempts(0)
+                .build();
+
+        java.util.concurrent.CountDownLatch startedLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch finishLatch = new java.util.concurrent.CountDownLatch(1);
+
+        when(outboxService.fetchUnprocessedBatch(3, 20)).thenReturn(List.of(msg));
+        doAnswer(invocation -> {
+            startedLatch.countDown();
+            finishLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            return null;
+        }).when(rabbitMqEventPublisher).publish(anyString(), anyString(), any(), any(), any());
+
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        executor.submit(() -> outboxProcessor.processOutboxMessages());
+
+        assertTrue(startedLatch.await(2, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue(outboxProcessor.isRelayBusy());
+
+        outboxProcessor.processOutboxMessages();
+
+        finishLatch.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS));
+
+        assertFalse(outboxProcessor.isRelayBusy());
+        verify(outboxService, times(1)).fetchUnprocessedBatch(3, 20);
+    }
 }
