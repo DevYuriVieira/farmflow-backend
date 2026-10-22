@@ -76,6 +76,39 @@ class FailureInjectionAndResilienceTest {
         verify(outboxService, times(1)).markFailed(eq("msg-100"), anyString());
         verify(farmFlowMetrics, times(1)).incrementOutboxFailed();
         verify(outboxService, never()).markProcessed(anyString());
+        assertTrue(outboxProcessor.isCircuitOpen());
+    }
+
+    @Test
+    void shouldHaltBatchAndTripCircuitBreakerWhenBrokerConnectivityFails() {
+        OutboxMessage msg1 = OutboxMessage.builder()
+                .id("msg-first")
+                .eventType("TelemetryAlert")
+                .payload("{}")
+                .occurredOn(Instant.now())
+                .attempts(0)
+                .build();
+        OutboxMessage msg2 = OutboxMessage.builder()
+                .id("msg-second")
+                .eventType("TelemetryAlert")
+                .payload("{}")
+                .occurredOn(Instant.now())
+                .attempts(0)
+                .build();
+
+        when(outboxService.fetchUnprocessedBatch(3, 20)).thenReturn(List.of(msg1, msg2));
+        doThrow(new AmqpConnectException(new java.net.ConnectException("Broker offline")))
+                .when(rabbitMqEventPublisher).publish(anyString(), anyString(), eq("msg-first"), any(), any());
+
+        outboxProcessor.processOutboxMessages();
+
+        verify(outboxService, times(1)).markFailed(eq("msg-first"), anyString());
+        verify(outboxService, never()).markFailed(eq("msg-second"), anyString());
+        verify(rabbitMqEventPublisher, never()).publish(anyString(), anyString(), eq("msg-second"), any(), any());
+        assertTrue(outboxProcessor.isCircuitOpen());
+
+        outboxProcessor.processOutboxMessages();
+        verify(outboxService, times(1)).fetchUnprocessedBatch(3, 20);
     }
 
     @Test

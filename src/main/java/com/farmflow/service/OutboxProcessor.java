@@ -23,9 +23,14 @@ public class OutboxProcessor {
     private final ApplicationEventPublisher localEventPublisher;
     private final RabbitMqEventPublisher rabbitMqEventPublisher;
     private final FarmFlowMetrics farmFlowMetrics;
+    private volatile long circuitOpenUntilTimestamp = 0;
 
     @Scheduled(fixedDelayString = "${farmflow.outbox.interval-ms:2000}")
     public void processOutboxMessages() {
+        if (System.currentTimeMillis() < circuitOpenUntilTimestamp) {
+            return;
+        }
+
         List<OutboxMessage> messages = outboxService.fetchUnprocessedBatch(MAX_ATTEMPTS, BATCH_SIZE);
         if (messages.isEmpty()) {
             return;
@@ -52,8 +57,40 @@ public class OutboxProcessor {
                 log.error("Failed to process outbox message id={}", message.getId(), e);
                 outboxService.markFailed(message.getId(), e.getMessage());
                 farmFlowMetrics.incrementOutboxFailed();
+
+                if (isBrokerConnectivityException(e)) {
+                    log.warn("Broker connectivity failure detected. Halting batch and tripping relay circuit breaker for 5000ms.");
+                    tripCircuitBreaker(5000);
+                    break;
+                }
             }
         }
+    }
+
+    public boolean isCircuitOpen() {
+        return System.currentTimeMillis() < circuitOpenUntilTimestamp;
+    }
+
+    public void resetCircuitBreaker() {
+        this.circuitOpenUntilTimestamp = 0;
+    }
+
+    private void tripCircuitBreaker(long durationMs) {
+        this.circuitOpenUntilTimestamp = System.currentTimeMillis() + durationMs;
+    }
+
+    private boolean isBrokerConnectivityException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof org.springframework.amqp.AmqpConnectException
+                    || current instanceof java.net.ConnectException
+                    || current instanceof java.net.SocketException
+                    || current instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private String resolveRoutingKey(OutboxMessage message) {
