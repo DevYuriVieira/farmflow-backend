@@ -1,6 +1,7 @@
 package com.farmflow.service;
 
 import com.farmflow.config.CorrelationIdFilter;
+import com.farmflow.config.W3CTraceContextUtils;
 import com.farmflow.entity.OutboxMessage;
 import com.farmflow.repository.OutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,11 +57,24 @@ class OutboxServiceTest {
         assertNotNull(recorded);
         assertEquals("TelemetryAlertEvent", recorded.getEventType());
         assertTrue(recorded.getPayload().contains("sensor-99"));
-        assertEquals("trace-abc-123", recorded.getTraceParent());
+        assertTrue(W3CTraceContextUtils.isValidW3CTraceParent(recorded.getTraceParent()));
+        assertEquals("trace-abc-123", recorded.getCorrelationId());
         assertEquals(0, recorded.getAttempts());
         assertNotNull(recorded.getOccurredOn());
         assertNull(recorded.getProcessedOn());
         verify(outboxRepository, times(1)).save(any(OutboxMessage.class));
+    }
+
+    @Test
+    void shouldPropagateExistingValidW3CTraceParentFromMdc() {
+        String validTraceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        MDC.put(CorrelationIdFilter.MDC_TRACEPARENT_KEY, validTraceParent);
+        when(outboxRepository.save(any(OutboxMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OutboxMessage recorded = outboxService.recordEvent("TelemetryAlertEvent", Map.of("sensorId", "s1"));
+
+        assertEquals(validTraceParent, recorded.getTraceParent());
+        assertEquals("trace-abc-123", recorded.getCorrelationId());
     }
 
     @Test

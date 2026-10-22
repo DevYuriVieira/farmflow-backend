@@ -66,10 +66,7 @@ public class OutboxService {
         }
 
         String traceParent = MDC.get(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
-        if (traceParent == null || traceParent.isBlank()) {
-            traceParent = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
-        }
-        if (traceParent == null || traceParent.isBlank()) {
+        if (!W3CTraceContextUtils.isValidW3CTraceParent(traceParent)) {
             traceParent = W3CTraceContextUtils.generateTraceParent(correlationId);
         }
 
