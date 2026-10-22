@@ -6,26 +6,24 @@ import jakarta.validation.constraints.NotBlank;
 public class AuthDtos {
 
     public record LoginRequest(
-        @NotBlank(message = "E-mail Ã© obrigatÃ³rio")
-        @Email(message = "E-mail invÃ¡lido")
+        @NotBlank(message = "E-mail é obrigatório")
+        @Email(message = "E-mail inválido")
         String email,
 
-        @NotBlank(message = "Senha Ã© obrigatÃ³ria")
+        @NotBlank(message = "Senha é obrigatória")
         String password
     ) {}
 
     public record RegisterRequest(
-        @NotBlank(message = "Nome Ã© obrigatÃ³rio")
+        @NotBlank(message = "Nome é obrigatório")
         String name,
 
-        @NotBlank(message = "E-mail Ã© obrigatÃ³rio")
-        @Email(message = "E-mail invÃ¡lido")
+        @NotBlank(message = "E-mail é obrigatório")
+        @Email(message = "E-mail inválido")
         String email,
 
-        @NotBlank(message = "Senha Ã© obrigatÃ³ria")
-        String password,
-
-        String role
+        @NotBlank(message = "Senha é obrigatória")
+        String password
     ) {}
 
     public record AuthResponse(

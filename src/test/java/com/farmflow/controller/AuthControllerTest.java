@@ -26,7 +26,7 @@ class AuthControllerTest {
 
     @Test
     void shouldRegisterNewUserSuccessfully() throws Exception {
-        var request = new RegisterRequest("Teste Produtor", "novo.produtor@farmflow.com", "senha123", "owner");
+        var request = new RegisterRequest("Teste Produtor", "novo.produtor@farmflow.com", "senha123");
 
         mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -34,12 +34,13 @@ class AuthControllerTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.token").isString())
             .andExpect(jsonPath("$.user.email").value("novo.produtor@farmflow.com"))
-            .andExpect(jsonPath("$.user.name").value("Teste Produtor"));
+            .andExpect(jsonPath("$.user.name").value("Teste Produtor"))
+            .andExpect(jsonPath("$.user.role").value("OWNER"));
     }
 
     @Test
     void shouldRejectInvalidRegistrationData() throws Exception {
-        var request = new RegisterRequest("", "email-invalido", "", "");
+        var request = new RegisterRequest("", "email-invalido", "");
 
         mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -51,7 +52,7 @@ class AuthControllerTest {
 
     @Test
     void shouldAuthenticateValidUser() throws Exception {
-        var register = new RegisterRequest("Login User", "login.test@farmflow.com", "senha123", "owner");
+        var register = new RegisterRequest("Login User", "login.test@farmflow.com", "senha123");
         mockMvc.perform(post("/auth/register")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(register)));

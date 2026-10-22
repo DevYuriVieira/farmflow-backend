@@ -37,7 +37,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail jÃ¡ cadastrado");
         }
 
-        String role = (request.role() != null && !request.role().isBlank()) ? request.role() : "owner";
+        String role = "OWNER";
 
         User user = User.builder()
             .name(request.name())
