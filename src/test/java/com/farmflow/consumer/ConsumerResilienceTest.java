@@ -14,6 +14,10 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -24,6 +28,7 @@ class ConsumerResilienceTest {
     private ActivityRepository activityRepository;
     private RabbitTemplate rabbitTemplate;
     private FarmFlowMetrics farmFlowMetrics;
+    private AmqpRetryRouter retryRouter;
     private TelemetryAlertConsumer telemetryConsumer;
     private PestScoutingConsumer pestConsumer;
 
@@ -35,19 +40,21 @@ class ConsumerResilienceTest {
         farmFlowMetrics = mock(FarmFlowMetrics.class);
         ObjectMapper objectMapper = new ObjectMapper();
 
+        retryRouter = new AmqpRetryRouter(rabbitTemplate);
+
         telemetryConsumer = new TelemetryAlertConsumer(
                 deduplicationService,
                 activityRepository,
                 objectMapper,
-                rabbitTemplate,
-                farmFlowMetrics
+                farmFlowMetrics,
+                retryRouter
         );
         pestConsumer = new PestScoutingConsumer(
                 deduplicationService,
                 activityRepository,
                 objectMapper,
-                rabbitTemplate,
-                farmFlowMetrics
+                farmFlowMetrics,
+                retryRouter
         );
     }
 
@@ -121,14 +128,142 @@ class ConsumerResilienceTest {
 
         telemetryConsumer.handleTelemetryAlert(message);
 
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
         verify(rabbitTemplate, times(1)).send(
                 eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
                 eq("events.dlq"),
-                eq(message)
+                messageCaptor.capture()
         );
+        Message dlqMsg = messageCaptor.getValue();
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_POISON, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("MALFORMED_JSON_PAYLOAD", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
         verify(farmFlowMetrics, times(1)).incrementConsumerFailed("TelemetryAlert");
         verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());
         verify(activityRepository, never()).save(any(FarmActivity.class));
+    }
+
+    @Test
+    void shouldEscalateTelemetryFailureFromInitialTo10sRetryQueue() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-retry-1");
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Database transient error"));
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("telemetry.alerts.retry.10s"),
+                captor.capture()
+        );
+        Message routedMsg = captor.getValue();
+        assertEquals(Integer.valueOf(1), routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_RETRY_10S, routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("Database transient error", routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
+        verify(farmFlowMetrics, times(1)).incrementConsumerFailed("TelemetryAlert");
+    }
+
+    @Test
+    void shouldEscalateTelemetryFailureFrom10sTo30sRetryQueue() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-retry-2");
+        props.setHeader(AmqpRetryRouter.HEADER_RETRY_COUNT, 1);
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Database timeout"));
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("telemetry.alerts.retry.30s"),
+                captor.capture()
+        );
+        Message routedMsg = captor.getValue();
+        assertEquals(Integer.valueOf(2), routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_RETRY_30S, routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("Database timeout", routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+    }
+
+    @Test
+    void shouldEscalateTelemetryFailureFrom30sTo90sRetryQueue() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-retry-3");
+        props.setHeader(AmqpRetryRouter.HEADER_RETRY_COUNT, 2);
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Broker connection reset"));
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("telemetry.alerts.retry.90s"),
+                captor.capture()
+        );
+        Message routedMsg = captor.getValue();
+        assertEquals(Integer.valueOf(3), routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_RETRY_90S, routedMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+    }
+
+    @Test
+    void shouldEscalateTelemetryFailureFrom90sToDlqWhenRetriesExhausted() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-retry-exhausted");
+        props.setHeader(AmqpRetryRouter.HEADER_RETRY_COUNT, 3);
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Fatal downstream error"));
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("events.dlq"),
+                captor.capture()
+        );
+        Message dlqMsg = captor.getValue();
+        assertEquals(Integer.valueOf(4), dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_EXHAUSTED, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("Fatal downstream error", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
+    }
+
+    @Test
+    void shouldCalculateRetryCountFromRabbitMqXDeathHeaderIfCustomHeaderAbsent() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-xdeath");
+
+        Map<String, Object> deathEntry = new HashMap<>();
+        deathEntry.put("count", 2L);
+        deathEntry.put("queue", RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE);
+        props.setHeader("x-death", List.of(deathEntry));
+
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Failure after 2 previous deaths"));
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("telemetry.alerts.retry.90s"),
+                captor.capture()
+        );
+        assertEquals(Integer.valueOf(3), captor.getValue().getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
     }
 
     @Test
@@ -202,14 +337,40 @@ class ConsumerResilienceTest {
 
         pestConsumer.handlePestDetected(message);
 
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
         verify(rabbitTemplate, times(1)).send(
                 eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
                 eq("events.dlq"),
-                eq(message)
+                messageCaptor.capture()
         );
+        Message dlqMsg = messageCaptor.getValue();
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_POISON, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("MALFORMED_JSON_PAYLOAD", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
         verify(farmFlowMetrics, times(1)).incrementConsumerFailed("PestDetected");
         verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());
         verify(activityRepository, never()).save(any(FarmActivity.class));
+    }
+
+    @Test
+    void shouldEscalatePestFailureToProgressiveRetryQueues() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("pest-retry-1");
+        Message message = new Message("{\"pest\":\"Lagarta\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        when(deduplicationService.executeIfNew(anyString(), anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Transient failure"));
+
+        pestConsumer.handlePestDetected(message);
+
+        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("pest.detected.retry.10s"),
+                captor.capture()
+        );
+        assertEquals(Integer.valueOf(1), captor.getValue().getMessageProperties().getHeader(AmqpRetryRouter.HEADER_RETRY_COUNT));
+        assertEquals(RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, captor.getValue().getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
     }
 
     @Test
