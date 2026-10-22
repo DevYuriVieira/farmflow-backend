@@ -29,6 +29,8 @@ public class SecurityConfig {
     private final CorrelationIdFilter correlationIdFilter;
     private final RateLimitFilter rateLimitFilter;
     private final IdempotencyFilter idempotencyFilter;
+    private final ProblemAuthenticationEntryPoint problemAuthenticationEntryPoint;
+    private final ProblemAccessDeniedHandler problemAccessDeniedHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -36,6 +38,10 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(problemAuthenticationEntryPoint)
+                .accessDeniedHandler(problemAccessDeniedHandler)
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/auth/**",
