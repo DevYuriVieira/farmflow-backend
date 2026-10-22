@@ -89,9 +89,6 @@ public class OutboxService {
         Instant now = Instant.now();
         List<OutboxMessage> messages = outboxRepository.findPendingForClaim(now, maxAttempts, batchSize);
         if (messages == null || messages.isEmpty()) {
-            messages = outboxRepository.findUnprocessedForUpdateSkipLocked(maxAttempts, batchSize);
-        }
-        if (messages == null || messages.isEmpty()) {
             return Collections.emptyList();
         }
 

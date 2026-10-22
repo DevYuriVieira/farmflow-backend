@@ -120,7 +120,7 @@ class OutboxServiceTest {
                 .traceParent("trace-1")
                 .occurredOn(Instant.now())
                 .build();
-        when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
+        when(outboxRepository.findPendingForClaim(any(), eq(3), eq(20))).thenReturn(List.of(msg));
         when(outboxRepository.findById("msg-batch-1")).thenReturn(Optional.of(msg));
 
         outboxProcessor.processOutboxMessages();
@@ -140,7 +140,7 @@ class OutboxServiceTest {
                 .occurredOn(Instant.now())
                 .attempts(0)
                 .build();
-        when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
+        when(outboxRepository.findPendingForClaim(any(), eq(3), eq(20))).thenReturn(List.of(msg));
         when(outboxRepository.findById("msg-fail-1")).thenReturn(Optional.of(msg));
         doThrow(new RuntimeException("Broker connection refused"))
                 .when(rabbitMqEventPublisher).publish(anyString(), any(), any(), any(), any());
@@ -179,7 +179,7 @@ class OutboxServiceTest {
                 .payload("{}")
                 .occurredOn(Instant.now())
                 .build();
-        when(outboxRepository.findUnprocessedForUpdateSkipLocked(3, 20)).thenReturn(List.of(msg));
+        when(outboxRepository.findPendingForClaim(any(), eq(3), eq(20))).thenReturn(List.of(msg));
         when(outboxRepository.findById("msg-timer-1")).thenReturn(Optional.of(msg));
 
         outboxProcessor.processOutboxMessages();
