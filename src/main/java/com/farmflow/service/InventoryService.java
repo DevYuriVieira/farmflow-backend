@@ -8,7 +8,6 @@ import com.farmflow.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -51,15 +50,30 @@ public class InventoryService {
     public InventoryItem updateItem(String id, UpdateInventoryRequest request) {
         InventoryItem item = getItemById(id);
 
-        if (request.name() != null) item.setName(request.name());
-        if (request.category() != null) item.setCategory(request.category());
-        if (request.quantity() != null) item.setQuantity(request.quantity());
-        if (request.unit() != null) item.setUnit(request.unit());
-        if (request.minimumThreshold() != null) item.setMinimumThreshold(request.minimumThreshold());
-        if (request.unitPrice() != null) item.setUnitPrice(request.unitPrice());
-        if (request.location() != null) item.setLocation(request.location());
-        item.setUpdatedAt(Instant.now());
+        item.updateDetails(
+            request.name(),
+            request.category(),
+            request.unit(),
+            request.minimumThreshold(),
+            request.unitPrice(),
+            request.location()
+        );
+        if (request.quantity() != null) {
+            item.adjustStock(request.quantity());
+        }
 
+        return inventoryRepository.save(item);
+    }
+
+    public InventoryItem deductStock(String id, Double amount) {
+        InventoryItem item = getItemById(id);
+        item.deductStock(amount);
+        return inventoryRepository.save(item);
+    }
+
+    public InventoryItem replenishStock(String id, Double amount) {
+        InventoryItem item = getItemById(id);
+        item.replenishStock(amount);
         return inventoryRepository.save(item);
     }
 
@@ -68,5 +82,3 @@ public class InventoryService {
         inventoryRepository.delete(item);
     }
 }
-
-
