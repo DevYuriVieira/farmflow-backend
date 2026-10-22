@@ -211,4 +211,29 @@ class ConsumerResilienceTest {
         verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());
         verify(activityRepository, never()).save(any(FarmActivity.class));
     }
+
+    @Test
+    void shouldPropagateTraceparentAndCorrelationIdToMdcDuringConsumerProcessing() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("tel-trace-1");
+        props.setHeader(com.farmflow.config.CorrelationIdFilter.TRACEPARENT_HEADER, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        props.setCorrelationId("corr-999");
+        Message message = new Message("{\"sensorId\":\"s1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        java.util.concurrent.atomic.AtomicReference<String> capturedTraceParent = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<String> capturedCorrelationId = new java.util.concurrent.atomic.AtomicReference<>();
+
+        doAnswer(invocation -> {
+            capturedTraceParent.set(org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_TRACEPARENT_KEY));
+            capturedCorrelationId.set(org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_CORRELATION_ID_KEY));
+            return true;
+        }).when(deduplicationService).executeIfNew(anyString(), anyString(), anyString(), any());
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        assertEquals("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", capturedTraceParent.get());
+        assertEquals("corr-999", capturedCorrelationId.get());
+        assertNull(org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_TRACEPARENT_KEY));
+        assertNull(org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_CORRELATION_ID_KEY));
+    }
 }

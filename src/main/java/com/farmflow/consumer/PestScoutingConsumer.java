@@ -2,6 +2,7 @@ package com.farmflow.consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
 import com.farmflow.entity.FarmActivity;
@@ -10,6 +11,7 @@ import com.farmflow.service.MessageDeduplicationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -36,28 +38,42 @@ public class PestScoutingConsumer {
         String messageId = message.getMessageProperties().getMessageId();
         String payload = new String(message.getBody(), StandardCharsets.UTF_8);
 
-        if (payload.isBlank() || !payload.startsWith("{")) {
-            log.error("Poison message detected in pest detected queue: id={}. Routing to DLQ.", messageId);
-            routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
-            farmFlowMetrics.incrementConsumerFailed("PestDetected");
-            return;
+        String traceParent = (String) message.getMessageProperties().getHeader(CorrelationIdFilter.TRACEPARENT_HEADER);
+        if (traceParent != null && !traceParent.isBlank()) {
+            MDC.put(CorrelationIdFilter.MDC_TRACEPARENT_KEY, traceParent);
+        }
+        String correlationId = message.getMessageProperties().getCorrelationId();
+        if (correlationId != null && !correlationId.isBlank()) {
+            MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID_KEY, correlationId);
         }
 
-        boolean processed = deduplicationService.executeIfNew(
-                CONSUMER_NAME,
-                messageId,
-                "PestDetected",
-                () -> applyBusinessEffect(payload, messageId)
-        );
+        try {
+            if (payload.isBlank() || !payload.startsWith("{")) {
+                log.error("Poison message detected in pest detected queue: id={}. Routing to DLQ.", messageId);
+                routeToDlq(message, "MALFORMED_JSON_PAYLOAD");
+                farmFlowMetrics.incrementConsumerFailed("PestDetected");
+                return;
+            }
 
-        if (!processed) {
-            farmFlowMetrics.incrementConsumerDuplicate("PestDetected");
-            log.info("Pest detected event duplicate discarded: messageId={}", messageId);
-            return;
+            boolean processed = deduplicationService.executeIfNew(
+                    CONSUMER_NAME,
+                    messageId,
+                    "PestDetected",
+                    () -> applyBusinessEffect(payload, messageId)
+            );
+
+            if (!processed) {
+                farmFlowMetrics.incrementConsumerDuplicate("PestDetected");
+                log.info("Pest detected event duplicate discarded: messageId={}", messageId);
+                return;
+            }
+
+            farmFlowMetrics.incrementConsumerProcessed("PestDetected");
+            log.info("Successfully processed pest detected alert: messageId={} payload={}", messageId, payload);
+        } finally {
+            MDC.remove(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
+            MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
         }
-
-        farmFlowMetrics.incrementConsumerProcessed("PestDetected");
-        log.info("Successfully processed pest detected alert: messageId={} payload={}", messageId, payload);
     }
 
     private void applyBusinessEffect(String payload, String messageId) {
