@@ -63,6 +63,7 @@ public class ArchitectureRulesTest {
         classes()
             .that().haveSimpleName("Machinery")
             .or().haveSimpleName("Plantation")
+            .or().haveSimpleName("FarmActivity")
             .should(new ArchCondition<JavaClass>("not declare public setter methods") {
                 @Override
                 public void check(JavaClass item, ConditionEvents events) {
