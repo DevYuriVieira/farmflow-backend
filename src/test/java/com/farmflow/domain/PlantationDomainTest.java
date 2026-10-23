@@ -202,4 +202,25 @@ class PlantationDomainTest {
                 plantation.updateDetails(null, null, null, null, null, null, -5.0, null)
         );
     }
+
+    @Test
+    void shouldThrowExceptionWhenParsingInvalidStatusString() {
+        assertThrows(BusinessException.class, () -> PlantationStatus.fromString("invalid_status_xyz"));
+        assertThrows(BusinessException.class, () -> PlantationStatus.fromString(null));
+        assertThrows(BusinessException.class, () -> PlantationStatus.fromString("   "));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenTransitioningToNullOrBlankStatus() {
+        Plantation plantation = Plantation.builder()
+                .farmId("farm-001")
+                .name("Talhao Test")
+                .crop("SOYBEAN")
+                .areaHectares(100.0)
+                .build();
+
+        assertThrows(BusinessException.class, () -> plantation.transitionStatus((String) null));
+        assertThrows(BusinessException.class, () -> plantation.transitionStatus(""));
+        assertThrows(BusinessException.class, () -> plantation.transitionStatus((PlantationStatus) null));
+    }
 }
