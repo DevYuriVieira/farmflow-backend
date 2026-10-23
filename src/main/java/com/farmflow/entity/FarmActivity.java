@@ -130,12 +130,13 @@ public class FarmActivity extends AuditableEntity {
         return this.priority;
     }
 
-    public void complete() {
+    public boolean complete() {
         if (Boolean.TRUE.equals(this.completed)) {
-            return;
+            return false;
         }
         this.completed = true;
         this.completedAt = Instant.now().toString();
+        return true;
     }
 
     public void reopen() {
