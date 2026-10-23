@@ -67,7 +67,7 @@ class RateLimitFilterTest {
         assertEquals("application/problem+json", blockedRes.getContentType());
 
         String body = blockedRes.getContentAsString();
-        assertTrue(body.contains("\"type\":\"https://tools.ietf.org/html/rfc9457\""));
+        assertTrue(body.contains("\"type\":\"urn:problem-type:farmflow:rate-limit-exceeded\""));
         assertTrue(body.contains("\"title\":\"Too Many Requests\""));
         assertTrue(body.contains("\"status\":429"));
         assertTrue(body.contains("\"traceId\""));
