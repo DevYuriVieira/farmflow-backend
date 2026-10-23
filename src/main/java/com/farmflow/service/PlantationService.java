@@ -11,12 +11,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PlantationService {
 
     private final PlantationRepository plantationRepository;
@@ -45,6 +47,7 @@ public class PlantationService {
         return plantation;
     }
 
+    @Transactional
     public Plantation createPlantation(CreatePlantationRequest request) {
         farmSecurity.validateTenantAccess(request.farmId());
         Plantation plantation = Plantation.builder()
@@ -63,6 +66,7 @@ public class PlantationService {
         return plantationRepository.save(plantation);
     }
 
+    @Transactional
     public Plantation updatePlantation(String id, UpdatePlantationRequest request) {
         Plantation plantation = getPlantationById(id);
 
@@ -93,6 +97,7 @@ public class PlantationService {
         return PageResponse.from(plantationRepository.findAll(spec, pageable));
     }
 
+    @Transactional
     public void deletePlantation(String id) {
         Plantation plantation = getPlantationById(id);
         plantationRepository.delete(plantation);
