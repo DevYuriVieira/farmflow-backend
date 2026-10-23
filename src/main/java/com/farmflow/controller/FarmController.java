@@ -55,7 +55,7 @@ public class FarmController {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#id)")
     public ResponseEntity<Farm> updateFarm(
         @PathVariable String id,
-        @RequestBody UpdateFarmRequest request
+        @Valid @RequestBody UpdateFarmRequest request
     ) {
         return ResponseEntity.ok(farmService.updateFarm(id, request));
     }
