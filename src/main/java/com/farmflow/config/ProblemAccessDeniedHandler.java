@@ -35,7 +35,7 @@ public class ProblemAccessDeniedHandler implements AccessDeniedHandler {
         response.setContentType("application/problem+json");
 
         Map<String, Object> problem = new LinkedHashMap<>();
-        problem.put("type", "https://tools.ietf.org/html/rfc9457");
+        problem.put("type", "urn:problem-type:farmflow:forbidden");
         problem.put("title", "Forbidden");
         problem.put("status", HttpStatus.FORBIDDEN.value());
         problem.put("detail", "Access denied: insufficient permissions to access this resource.");
