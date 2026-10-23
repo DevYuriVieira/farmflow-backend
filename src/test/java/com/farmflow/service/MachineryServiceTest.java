@@ -53,7 +53,7 @@ class MachineryServiceTest {
                 .status("OPERATIONAL")
                 .fuelLevelPercent(80.0)
                 .build();
-        sampleMachinery.setId("machinery-123");
+        org.springframework.test.util.ReflectionTestUtils.setField(sampleMachinery, "id", "machinery-123");
     }
 
     @Test
