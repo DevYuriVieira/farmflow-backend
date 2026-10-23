@@ -29,6 +29,7 @@ public class FarmDtos {
     public record UpdateFarmRequest(
         String name,
         String location,
+        @Positive(message = "Área total deve ser maior que zero")
         Double totalAreaHectares,
         String primaryCrop,
         String ownerName,
