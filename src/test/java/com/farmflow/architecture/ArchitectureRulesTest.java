@@ -93,4 +93,10 @@ public class ArchitectureRulesTest {
         noClasses()
             .that().resideInAPackage("..consumer..")
             .should().dependOnClassesThat().resideInAPackage("..controller..");
+
+    @ArchTest
+    static final ArchRule domainClassesShouldNotDependOnSpringWeb =
+        noClasses()
+            .that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat().resideInAPackage("org.springframework.web..");
 }
