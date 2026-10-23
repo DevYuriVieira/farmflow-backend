@@ -84,11 +84,16 @@ jobs:
       - name: Compile Application
         run: ./mvnw -B compile
 
+      - name: Configure Docker Socket Permissions
+        run: sudo chmod 666 /var/run/docker.sock || true
+
       - name: Run Automated Test Suites
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/farmflow
           SPRING_DATASOURCE_USERNAME: postgres
           SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
+          SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_RABBITMQ_HOST: 127.0.0.1
           SPRING_RABBITMQ_PORT: 5672
           SPRING_RABBITMQ_USERNAME: guest
@@ -106,11 +111,11 @@ jobs:
                   for fl in tc.findall('failure'):
                       name = tc.attrib.get('name', 'unknown')
                       cls = tc.attrib.get('classname', 'unknown')
-                      msg = fl.attrib.get('message', '')
+                      msg = fl.attrib.get('message', '') or (fl.text or '').strip()[:200]
                       print(f'::error title={cls}.{name}::{msg}')
                   for er in tc.findall('error'):
                       name = tc.attrib.get('name', 'unknown')
                       cls = tc.attrib.get('classname', 'unknown')
-                      msg = er.attrib.get('message', '')
+                      msg = er.attrib.get('message', '') or (er.text or '').strip()[:200]
                       print(f'::error title={cls}.{name}::{msg}')
           "
