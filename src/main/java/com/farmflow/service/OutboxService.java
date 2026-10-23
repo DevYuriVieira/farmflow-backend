@@ -26,7 +26,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class OutboxService {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxService.class);
-    private static final int LEASE_DURATION_SECONDS = 60;
+    private static final int LEASE_DURATION_SECONDS = 300;
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
 
     private static final Map<String, String> ROUTING_KEY_CATALOG = Map.of(
@@ -45,13 +45,13 @@ public class OutboxService {
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public OutboxMessage recordEvent(String eventType, Object event) {
         String routingKey = resolveRoutingKey(eventType);
         return recordEvent(eventType, routingKey, event);
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
     public OutboxMessage recordEvent(String eventType, String routingKey, Object event) {
         String payload;
         try {
@@ -94,11 +94,19 @@ public class OutboxService {
 
         Instant leaseExpiresAt = now.plusSeconds(LEASE_DURATION_SECONDS);
         for (OutboxMessage message : messages) {
+            if (message.getStatus() == OutboxStatus.PROCESSING) {
+                int newAttempts = message.getAttempts() + 1;
+                message.setAttempts(newAttempts);
+                if (newAttempts >= maxAttempts) {
+                    message.setStatus(OutboxStatus.DEAD);
+                    continue;
+                }
+            }
             message.setStatus(OutboxStatus.PROCESSING);
             message.setNextAttemptAt(leaseExpiresAt);
         }
         outboxRepository.saveAll(messages);
-        return messages;
+        return messages.stream().filter(m -> m.getStatus() == OutboxStatus.PROCESSING).toList();
     }
 
     @Transactional
@@ -137,7 +145,21 @@ public class OutboxService {
     }
 
     public long getBacklogCount() {
-        return outboxRepository.countByProcessedOnIsNull();
+        return outboxRepository.countPendingBacklog();
+    }
+
+    @Transactional
+    public int purgePublishedMessages(java.time.Duration maxRetentionAge) {
+        Instant cutoff = Instant.now().minus(maxRetentionAge);
+        int deleted = outboxRepository.deleteProcessedOlderThan(cutoff);
+        log.debug("Expunged {} published outbox records older than {}", deleted, cutoff);
+        return deleted;
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelayString = "${farmflow.outbox.cleanup-interval-ms:86400000}")
+    @Transactional
+    public void purgeOldPublishedMessages() {
+        purgePublishedMessages(java.time.Duration.ofDays(7));
     }
 
     public double getOldestMessageLagSeconds() {
