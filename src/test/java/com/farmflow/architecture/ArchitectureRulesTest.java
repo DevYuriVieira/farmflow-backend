@@ -68,7 +68,7 @@ public class ArchitectureRulesTest {
             .should(new ArchCondition<JavaClass>("not declare public setter methods") {
                 @Override
                 public void check(JavaClass item, ConditionEvents events) {
-                    for (JavaMethod method : item.getMethods()) {
+                    for (JavaMethod method : item.getAllMethods()) {
                         if (method.getName().startsWith("set") && method.getModifiers().contains(JavaModifier.PUBLIC)) {
                             events.add(SimpleConditionEvent.violated(method, "Method " + method.getFullName() + " is public"));
                         }
