@@ -58,7 +58,7 @@ public class PlantationController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Plantation> updatePlantation(
         @PathVariable String id,
-        @RequestBody UpdatePlantationRequest request
+        @Valid @RequestBody UpdatePlantationRequest request
     ) {
         return ResponseEntity.ok(plantationService.updatePlantation(id, request));
     }
