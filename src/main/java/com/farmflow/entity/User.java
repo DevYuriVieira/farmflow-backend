@@ -29,4 +29,8 @@ public class User extends AuditableEntity {
     private String farmId;
 
     private String avatarUrl;
+
+    public void setId(String id) {
+        super.setId(id);
+    }
 }
