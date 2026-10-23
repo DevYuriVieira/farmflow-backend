@@ -34,6 +34,9 @@ class MachineryServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private com.farmflow.config.FarmSecurityEvaluator farmSecurity;
+
     @InjectMocks
     private MachineryService machineryService;
 

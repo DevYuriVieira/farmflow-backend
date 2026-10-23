@@ -22,12 +22,21 @@ public class MachineryService {
     private final MachineryRepository machineryRepository;
     private final OutboxService outboxService;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
 
     public List<Machinery> getAllMachinery() {
-        return machineryRepository.findAll();
+        if (farmSecurity.isAdmin()) {
+            return machineryRepository.findAll();
+        }
+        String farmId = farmSecurity.getCurrentUserFarmId();
+        if (farmId == null) {
+            return List.of();
+        }
+        return machineryRepository.findByFarmId(farmId);
     }
 
     public List<Machinery> getMachineryByFarm(String farmId, String status) {
+        farmSecurity.validateTenantAccess(farmId);
         if (status != null && !status.isBlank()) {
             return machineryRepository.findByFarmIdAndStatus(farmId, status);
         }
@@ -35,12 +44,15 @@ public class MachineryService {
     }
 
     public Machinery getMachineryById(String id) {
-        return machineryRepository.findById(id)
+        Machinery machinery = machineryRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Máquina/equipamento não encontrado"));
+        farmSecurity.validateTenantAccess(machinery.getFarmId());
+        return machinery;
     }
 
     @Transactional
     public Machinery createMachinery(CreateMachineryRequest request) {
+        farmSecurity.validateTenantAccess(request.farmId());
         Machinery machinery = Machinery.builder()
             .farmId(request.farmId())
             .name(request.name())

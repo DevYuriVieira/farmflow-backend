@@ -19,11 +19,13 @@ public class MachineryController {
     private final MachineryService machineryService;
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Machinery>> getAllMachinery() {
         return ResponseEntity.ok(machineryService.getAllMachinery());
     }
 
     @GetMapping("/farm/{farmId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#farmId)")
     public ResponseEntity<List<Machinery>> getMachineryByFarm(
         @PathVariable String farmId,
         @RequestParam(required = false) String status
@@ -32,16 +34,19 @@ public class MachineryController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> getMachineryById(@PathVariable String id) {
         return ResponseEntity.ok(machineryService.getMachineryById(id));
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#request.farmId())")
     public ResponseEntity<Machinery> createMachinery(@Valid @RequestBody CreateMachineryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(machineryService.createMachinery(request));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> updateMachinery(
         @PathVariable String id,
         @RequestBody UpdateMachineryRequest request
@@ -50,12 +55,14 @@ public class MachineryController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteMachinery(@PathVariable String id) {
         machineryService.deleteMachinery(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/maintenance")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> sendToMaintenance(
         @PathVariable String id,
         @RequestBody(required = false) SendToMaintenanceRequest request
@@ -64,6 +71,7 @@ public class MachineryController {
     }
 
     @PostMapping("/{id}/return-from-maintenance")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> returnFromMaintenance(
         @PathVariable String id,
         @RequestBody(required = false) ReturnFromMaintenanceRequest request
@@ -72,6 +80,7 @@ public class MachineryController {
     }
 
     @PostMapping("/{id}/operating-hours")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> updateOperatingHours(
         @PathVariable String id,
         @RequestBody UpdateOperatingHoursRequest request
@@ -80,11 +89,13 @@ public class MachineryController {
     }
 
     @PostMapping("/{id}/deactivate")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> deactivate(@PathVariable String id) {
         return ResponseEntity.ok(machineryService.deactivate(id));
     }
 
     @PostMapping("/{id}/activate")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> activate(@PathVariable String id) {
         return ResponseEntity.ok(machineryService.activate(id));
     }
