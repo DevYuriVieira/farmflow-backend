@@ -25,7 +25,7 @@ class ProblemSecurityHandlersTest {
         assertEquals(HttpStatus.UNAUTHORIZED.value(), response.getStatus());
         assertEquals("application/problem+json", response.getContentType());
         String body = response.getContentAsString();
-        assertTrue(body.contains("\"type\":\"https://tools.ietf.org/html/rfc9457\""));
+        assertTrue(body.contains("\"type\":\"urn:problem-type:farmflow:unauthorized\""));
         assertTrue(body.contains("\"title\":\"Unauthorized\""));
         assertTrue(body.contains("\"status\":401"));
         assertTrue(body.contains("\"instance\":\"/farms\""));
@@ -44,7 +44,7 @@ class ProblemSecurityHandlersTest {
         assertEquals(HttpStatus.FORBIDDEN.value(), response.getStatus());
         assertEquals("application/problem+json", response.getContentType());
         String body = response.getContentAsString();
-        assertTrue(body.contains("\"type\":\"https://tools.ietf.org/html/rfc9457\""));
+        assertTrue(body.contains("\"type\":\"urn:problem-type:farmflow:forbidden\""));
         assertTrue(body.contains("\"title\":\"Forbidden\""));
         assertTrue(body.contains("\"status\":403"));
         assertTrue(body.contains("\"instance\":\"/admin/settings\""));
