@@ -46,14 +46,20 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/auth/**",
                     "/error",
+                    "/health/live",
+                    "/health/ready",
+                    "/actuator/health",
+                    "/actuator/health/**"
+                ).permitAll()
+                .requestMatchers(
+                    "/health/dependencies",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/v3/api-docs/**",
-                    "/actuator/health",
-                    "/actuator/health/**",
                     "/actuator/info",
-                    "/health/**"
-                ).permitAll()
+                    "/actuator/metrics/**",
+                    "/actuator/metrics"
+                ).hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter.class)
