@@ -18,12 +18,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
-    public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invÃ¡lidas"));
+    private static final String DUMMY_BCRYPT_HASH = "$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRpHrfxuLOo3v1t6tVmVlOeVQp02W";
 
+    public AuthResponse login(LoginRequest request) {
+        var userOptional = userRepository.findByEmail(request.email());
+        if (userOptional.isEmpty()) {
+            passwordEncoder.matches(request.password(), DUMMY_BCRYPT_HASH);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invalidas");
+        }
+
+        User user = userOptional.get();
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invÃ¡lidas");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invalidas");
         }
 
         String token = tokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole());
