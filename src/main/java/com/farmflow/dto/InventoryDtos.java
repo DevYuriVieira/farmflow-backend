@@ -32,9 +32,12 @@ public class InventoryDtos {
     public record UpdateInventoryRequest(
         String name,
         InventoryCategory category,
+        @PositiveOrZero(message = "Quantidade não pode ser negativa")
         Double quantity,
         String unit,
+        @PositiveOrZero(message = "Limite mínimo não pode ser negativo")
         Double minimumThreshold,
+        @PositiveOrZero(message = "Preço unitário não pode ser negativo")
         Double unitPrice,
         String location
     ) {}
