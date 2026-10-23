@@ -1,5 +1,6 @@
 package com.farmflow.service;
 
+import com.farmflow.config.FarmSecurityEvaluator;
 import com.farmflow.entity.TelemetryReading;
 import com.farmflow.enums.TelemetryType;
 import com.farmflow.dto.TelemetryDtos.CreateTelemetryRequest;
@@ -19,8 +20,10 @@ public class TelemetryService {
     private final TelemetryRepository telemetryRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final OutboxService outboxService;
+    private final FarmSecurityEvaluator farmSecurity;
 
     public List<TelemetryReading> getReadingsByFarm(String farmId, TelemetryType type) {
+        farmSecurity.validateTenantAccess(farmId);
         if (type != null) {
             return telemetryRepository.findByFarmIdAndTypeOrderByTimestampDesc(farmId, type);
         }
@@ -28,11 +31,16 @@ public class TelemetryService {
     }
 
     public List<TelemetryReading> getReadingsBySensor(String sensorId) {
-        return telemetryRepository.findBySensorIdOrderByTimestampDesc(sensorId);
+        List<TelemetryReading> readings = telemetryRepository.findBySensorIdOrderByTimestampDesc(sensorId);
+        if (!readings.isEmpty()) {
+            farmSecurity.validateTenantAccess(readings.get(0).getFarmId());
+        }
+        return readings;
     }
 
     @Transactional
     public TelemetryReading recordReading(CreateTelemetryRequest request) {
+        farmSecurity.validateTenantAccess(request.farmId());
         TelemetryReading reading = TelemetryReading.builder()
             .farmId(request.farmId())
             .plantationId(request.plantationId())
