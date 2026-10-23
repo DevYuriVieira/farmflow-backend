@@ -33,17 +33,30 @@ class InventoryControllerTest {
     @Autowired
     private InventoryRepository inventoryRepository;
 
+    @Autowired
+    private com.farmflow.repository.UserRepository userRepository;
+
     private String validJwtToken;
 
     @BeforeEach
     void setUp() {
-        validJwtToken = "Bearer " + jwtTokenProvider.generateToken("user-test-id", "test@farmflow.com", "owner");
+        com.farmflow.entity.User testUser = userRepository.findByEmail("test@farmflow.com")
+                .orElseGet(() -> userRepository.save(com.farmflow.entity.User.builder()
+                        .name("Test User")
+                        .email("test@farmflow.com")
+                        .password("secret")
+                        .role("OWNER")
+                        .farmId("farm-123")
+                        .build()));
+        testUser.setFarmId("farm-123");
+        userRepository.save(testUser);
+        validJwtToken = "Bearer " + jwtTokenProvider.generateToken(testUser.getId(), testUser.getEmail(), testUser.getRole());
     }
 
     @Test
     void shouldDenyUnauthenticatedAccessToInventory() throws Exception {
         mockMvc.perform(get("/inventory"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

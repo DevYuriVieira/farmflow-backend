@@ -15,12 +15,21 @@ import java.util.List;
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
+    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
 
     public List<InventoryItem> getAllItems() {
-        return inventoryRepository.findAll();
+        if (farmSecurity.isAdmin()) {
+            return inventoryRepository.findAll();
+        }
+        String farmId = farmSecurity.getCurrentUserFarmId();
+        if (farmId == null) {
+            return List.of();
+        }
+        return inventoryRepository.findByFarmId(farmId);
     }
 
     public List<InventoryItem> getItemsByFarm(String farmId, InventoryCategory category) {
+        farmSecurity.validateTenantAccess(farmId);
         if (category != null) {
             return inventoryRepository.findByFarmIdAndCategory(farmId, category);
         }
@@ -28,11 +37,14 @@ public class InventoryService {
     }
 
     public InventoryItem getItemById(String id) {
-        return inventoryRepository.findById(id)
+        InventoryItem item = inventoryRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Item de inventário não encontrado"));
+        farmSecurity.validateTenantAccess(item.getFarmId());
+        return item;
     }
 
     public InventoryItem createItem(CreateInventoryRequest request) {
+        farmSecurity.validateTenantAccess(request.farmId());
         InventoryItem item = InventoryItem.builder()
             .farmId(request.farmId())
             .name(request.name())
