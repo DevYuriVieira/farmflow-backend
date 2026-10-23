@@ -60,7 +60,7 @@ public class ActivityController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<FarmActivity> updateActivity(
         @PathVariable String id,
-        @RequestBody UpdateActivityRequest request
+        @Valid @RequestBody UpdateActivityRequest request
     ) {
         return ResponseEntity.ok(activityService.updateActivity(id, request));
     }
@@ -69,7 +69,7 @@ public class ActivityController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<FarmActivity> toggleActivityStatus(
         @PathVariable String id,
-        @RequestBody ToggleStatusRequest request
+        @Valid @RequestBody ToggleStatusRequest request
     ) {
         return ResponseEntity.ok(activityService.toggleStatus(id, request.completed()));
     }
