@@ -1,17 +1,20 @@
 package com.farmflow.service;
 
-import com.farmflow.exceptions.ResourceNotFoundException;
+import com.farmflow.dto.InventoryDtos.*;
 import com.farmflow.entity.InventoryItem;
 import com.farmflow.enums.InventoryCategory;
-import com.farmflow.dto.InventoryDtos.*;
+import com.farmflow.exceptions.BusinessException;
+import com.farmflow.exceptions.ResourceNotFoundException;
 import com.farmflow.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
@@ -43,6 +46,7 @@ public class InventoryService {
         return item;
     }
 
+    @Transactional
     public InventoryItem createItem(CreateInventoryRequest request) {
         farmSecurity.validateTenantAccess(request.farmId());
         InventoryItem item = InventoryItem.builder()
@@ -59,6 +63,7 @@ public class InventoryService {
         return inventoryRepository.save(item);
     }
 
+    @Transactional
     public InventoryItem updateItem(String id, UpdateInventoryRequest request) {
         InventoryItem item = getItemById(id);
 
@@ -77,18 +82,30 @@ public class InventoryService {
         return inventoryRepository.save(item);
     }
 
+    @Transactional
     public InventoryItem deductStock(String id, Double amount) {
-        InventoryItem item = getItemById(id);
-        item.deductStock(amount);
-        return inventoryRepository.save(item);
+        if (amount == null || amount <= 0.0) {
+            throw new BusinessException("Deduction amount must be positive.");
+        }
+        getItemById(id);
+        int updated = inventoryRepository.deductAtomically(id, amount, java.time.Instant.now());
+        if (updated == 0) {
+            throw new BusinessException("Insufficient inventory to deduct " + amount + " units.");
+        }
+        return inventoryRepository.findById(id).orElseThrow();
     }
 
+    @Transactional
     public InventoryItem replenishStock(String id, Double amount) {
-        InventoryItem item = getItemById(id);
-        item.replenishStock(amount);
-        return inventoryRepository.save(item);
+        if (amount == null || amount <= 0.0) {
+            throw new BusinessException("Replenishment amount must be positive.");
+        }
+        getItemById(id);
+        inventoryRepository.replenishAtomically(id, amount, java.time.Instant.now());
+        return inventoryRepository.findById(id).orElseThrow();
     }
 
+    @Transactional
     public void deleteItem(String id) {
         InventoryItem item = getItemById(id);
         inventoryRepository.delete(item);
