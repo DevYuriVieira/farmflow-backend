@@ -32,9 +32,22 @@ class InventoryConcurrencyTest extends AbstractIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @Autowired
+    private com.farmflow.repository.UserRepository userRepository;
+
     @BeforeEach
     void setUp() {
         inventoryRepository.deleteAll();
+        var admin = userRepository.findByEmail("admin-inventory-test@farmflow.com")
+                .orElseGet(() -> userRepository.save(com.farmflow.entity.User.builder()
+                        .name("Admin Inventory Test")
+                        .email("admin-inventory-test@farmflow.com")
+                        .password("secret1234567")
+                        .role("ADMIN")
+                        .build()));
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(admin, null)
+        );
     }
 
     @Test
