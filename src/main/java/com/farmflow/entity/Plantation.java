@@ -89,12 +89,12 @@ public class Plantation extends AuditableEntity {
 
     public static class PlantationBuilder {
         public PlantationBuilder status(String status) {
-            this.status = PlantationStatus.fromString(status);
+            this.status = (status != null && !status.isBlank()) ? PlantationStatus.fromString(status) : PlantationStatus.PLANTED;
             return this;
         }
 
         public PlantationBuilder status(PlantationStatus status) {
-            this.status = status;
+            this.status = status != null ? status : PlantationStatus.PLANTED;
             return this;
         }
     }
@@ -109,7 +109,7 @@ public class Plantation extends AuditableEntity {
 
     public void transitionStatus(PlantationStatus newStatus) {
         if (newStatus == null) {
-            return;
+            throw new BusinessException("Target plantation status cannot be null.");
         }
         if (!this.status.canTransitionTo(newStatus)) {
             throw new BusinessException("Cannot transition plantation status from " + this.status + " to " + newStatus);
@@ -118,9 +118,10 @@ public class Plantation extends AuditableEntity {
     }
 
     public void transitionStatus(String newStatus) {
-        if (newStatus != null && !newStatus.isBlank()) {
-            transitionStatus(PlantationStatus.fromString(newStatus));
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new BusinessException("Target plantation status cannot be null or blank.");
         }
+        transitionStatus(PlantationStatus.fromString(newStatus));
     }
 
     public void updateDetails(
