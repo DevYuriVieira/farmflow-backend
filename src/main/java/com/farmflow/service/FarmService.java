@@ -70,13 +70,15 @@ public class FarmService {
     public Farm updateFarm(String id, UpdateFarmRequest request) {
         Farm farm = getFarmById(id);
 
-        if (request.name() != null) farm.setName(request.name());
-        if (request.location() != null) farm.setLocation(request.location());
-        if (request.totalAreaHectares() != null) farm.setTotalAreaHectares(request.totalAreaHectares());
-        if (request.primaryCrop() != null) farm.setPrimaryCrop(request.primaryCrop());
-        if (request.ownerName() != null) farm.setOwnerName(request.ownerName());
-        if (request.contactPhone() != null) farm.setContactPhone(request.contactPhone());
-        if (request.status() != null) farm.setStatus(request.status());
+        farm.updateDetails(
+            request.name(),
+            request.location(),
+            request.totalAreaHectares(),
+            request.primaryCrop(),
+            request.ownerName(),
+            request.contactPhone(),
+            request.status()
+        );
 
         return farmRepository.save(farm);
     }
