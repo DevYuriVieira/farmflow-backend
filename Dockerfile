@@ -8,6 +8,15 @@ RUN ./mvnw clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=builder /app/target/*.jar app.jar
+
+RUN addgroup -S farmflow && adduser -S farmflow -G farmflow
+
+COPY --from=builder --chown=farmflow:farmflow /app/target/*.jar app.jar
+
+USER farmflow:farmflow
+
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/v1/health/live || exit 1
+
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
