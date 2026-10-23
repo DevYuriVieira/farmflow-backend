@@ -144,6 +144,29 @@ class ConsumerResilienceTest {
     }
 
     @Test
+    void shouldRoutePoisonWhenTelemetryMessageMissingMessageId() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId(null);
+        Message message = new Message("{\"sensorId\":\"s1\",\"farmId\":\"f1\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("events.dlq"),
+                messageCaptor.capture()
+        );
+        Message dlqMsg = messageCaptor.getValue();
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_POISON, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("MISSING_MESSAGE_ID", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
+        verify(farmFlowMetrics, times(1)).incrementConsumerFailed("TelemetryAlert");
+        verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());
+        verify(activityRepository, never()).save(any(FarmActivity.class));
+    }
+
+    @Test
     void shouldEscalateTelemetryFailureFromInitialTo10sRetryQueue() {
         MessageProperties props = new MessageProperties();
         props.setMessageId("tel-retry-1");
@@ -346,6 +369,29 @@ class ConsumerResilienceTest {
         Message dlqMsg = messageCaptor.getValue();
         assertEquals(AmqpRetryRouter.FAILURE_TYPE_POISON, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
         assertEquals("MALFORMED_JSON_PAYLOAD", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
+        assertEquals(RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
+        verify(farmFlowMetrics, times(1)).incrementConsumerFailed("PestDetected");
+        verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());
+        verify(activityRepository, never()).save(any(FarmActivity.class));
+    }
+
+    @Test
+    void shouldRoutePoisonWhenPestMessageMissingMessageId() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId(null);
+        Message message = new Message("{\"farmId\":\"f1\",\"pestType\":\"Lagarta\"}".getBytes(StandardCharsets.UTF_8), props);
+
+        pestConsumer.handlePestDetected(message);
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(rabbitTemplate, times(1)).send(
+                eq(RabbitMqTopologyConfig.DLX_EXCHANGE),
+                eq("events.dlq"),
+                messageCaptor.capture()
+        );
+        Message dlqMsg = messageCaptor.getValue();
+        assertEquals(AmqpRetryRouter.FAILURE_TYPE_POISON, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_FAILURE_TYPE));
+        assertEquals("MISSING_MESSAGE_ID", dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_EXCEPTION_MESSAGE));
         assertEquals(RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, dlqMsg.getMessageProperties().getHeader(AmqpRetryRouter.HEADER_ORIGINAL_QUEUE));
         verify(farmFlowMetrics, times(1)).incrementConsumerFailed("PestDetected");
         verify(deduplicationService, never()).executeIfNew(anyString(), anyString(), anyString(), any());

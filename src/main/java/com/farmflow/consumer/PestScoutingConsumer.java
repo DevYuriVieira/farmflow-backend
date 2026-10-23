@@ -47,6 +47,13 @@ public class PestScoutingConsumer {
         }
 
         try {
+            if (messageId == null || messageId.isBlank()) {
+                log.error("Poison message detected in pest detected queue: missing mandatory messageId. Routing to DLQ.");
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "MISSING_MESSAGE_ID");
+                farmFlowMetrics.incrementConsumerFailed("PestDetected");
+                return;
+            }
+
             if (payload.isBlank() || !payload.startsWith("{")) {
                 log.error("Poison message detected in pest detected queue: id={}. Routing to DLQ.", messageId);
                 retryRouter.routePoison(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "MALFORMED_JSON_PAYLOAD");

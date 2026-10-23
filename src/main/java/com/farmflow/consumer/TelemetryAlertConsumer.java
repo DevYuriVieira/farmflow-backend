@@ -47,6 +47,13 @@ public class TelemetryAlertConsumer {
         }
 
         try {
+            if (messageId == null || messageId.isBlank()) {
+                log.error("Poison message detected in telemetry queue: missing mandatory messageId. Routing to DLQ.");
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "MISSING_MESSAGE_ID");
+                farmFlowMetrics.incrementConsumerFailed("TelemetryAlert");
+                return;
+            }
+
             if (payload.isBlank() || !payload.startsWith("{")) {
                 log.error("Poison message detected in telemetry queue: id={}. Routing to DLQ.", messageId);
                 retryRouter.routePoison(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "MALFORMED_JSON_PAYLOAD");
