@@ -104,7 +104,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setContentType("application/problem+json");
 
             Map<String, Object> problem = new LinkedHashMap<>();
-            problem.put("type", "https://tools.ietf.org/html/rfc9457");
+            problem.put("type", "urn:problem-type:farmflow:rate-limit-exceeded");
             problem.put("title", "Too Many Requests");
             problem.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
             problem.put("detail", "Rate limit quota exceeded. Maximum " + maxRequests + " requests per minute allowed.");
