@@ -32,12 +32,16 @@ import java.util.UUID;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    private static final URI DEFAULT_TYPE = URI.create("https://tools.ietf.org/html/rfc9457");
+    private static final String PROBLEM_BASE_URN = "urn:problem-type:farmflow:";
+
+    private static URI problemType(String slug) {
+        return URI.create(PROBLEM_BASE_URN + slug);
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ProblemDetail handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("not-found"));
         problem.setTitle("Not Found");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -47,7 +51,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ProblemDetail handleBusiness(BusinessException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("business-rule-violation"));
         problem.setTitle("Business Rule Violation");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -60,7 +64,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Invalid date format: '" + ex.getParsedString() + "'. Expected format is YYYY-MM-DD (ISO-8601)."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("invalid-date-format"));
         problem.setTitle("Invalid Date Format");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -74,7 +78,7 @@ public class GlobalExceptionHandler {
             detail = "Invalid date format: '" + parseEx.getParsedString() + "'. Expected format is YYYY-MM-DD (ISO-8601).";
         }
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("malformed-request"));
         problem.setTitle("Malformed Request Body");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -84,7 +88,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidMachineryStateException.class)
     public ProblemDetail handleInvalidMachineryState(InvalidMachineryStateException ex, HttpServletRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("invalid-machinery-state"));
         problem.setTitle("Invalid Machinery State Transition");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -99,7 +103,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 "A database integrity constraint violation or duplicate record conflict occurred."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("conflict"));
         problem.setTitle("Conflict");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("traceId", traceId);
@@ -115,7 +119,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 "The requested resource was modified by another concurrent transaction. Please reload and retry."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("optimistic-concurrency-conflict"));
         problem.setTitle("Optimistic Concurrency Conflict");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("traceId", traceId);
@@ -129,7 +133,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.METHOD_NOT_ALLOWED,
                 ex.getMessage() != null ? ex.getMessage() : "Request method not supported"
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("method-not-allowed"));
         problem.setTitle("Method Not Allowed");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -142,7 +146,7 @@ public class GlobalExceptionHandler {
                 ex.getStatusCode(),
                 ex.getReason() != null ? ex.getReason() : "Request processing error"
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("request-error"));
         problem.setTitle(ex.getStatusCode().toString());
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -160,7 +164,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNPROCESSABLE_ENTITY,
                 "Validation failed for one or more fields."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("validation-failed"));
         problem.setTitle("Validation Failed");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("invalidParams", errors);
@@ -175,7 +179,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.FORBIDDEN,
                 "Access denied: insufficient permissions to access this resource."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("forbidden"));
         problem.setTitle("Forbidden");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -188,7 +192,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNAUTHORIZED,
                 "Authentication required or credentials invalid."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("unauthorized"));
         problem.setTitle("Unauthorized");
         problem.setInstance(URI.create(request.getRequestURI()));
         enrichProblemDetail(problem);
@@ -203,7 +207,7 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "An unexpected internal error occurred. Please contact support referencing the traceId."
         );
-        problem.setType(DEFAULT_TYPE);
+        problem.setType(problemType("internal-error"));
         problem.setTitle("Internal Server Error");
         problem.setInstance(URI.create(request.getRequestURI()));
         problem.setProperty("traceId", traceId);
