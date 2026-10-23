@@ -39,10 +39,12 @@ public class PlantationDtos {
         String name,
         String crop,
         String variety,
+        @Positive(message = "Área deve ser positiva")
         Double areaHectares,
         String status,
         String plantingDate,
         String harvestEstimateDate,
+        @jakarta.validation.constraints.PositiveOrZero(message = "Produtividade esperada não pode ser negativa")
         Double expectedYieldTons,
         String notes
     ) {}
