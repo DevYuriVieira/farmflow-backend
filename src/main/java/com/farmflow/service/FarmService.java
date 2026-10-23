@@ -13,9 +13,11 @@ import com.farmflow.dto.PageResponse;
 import com.farmflow.specification.FarmSpecification;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class FarmService {
 
     private final FarmRepository farmRepository;
@@ -39,6 +41,7 @@ public class FarmService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fazenda não encontrada"));
     }
 
+    @Transactional
     public Farm createFarm(CreateFarmRequest request) {
         Farm farm = Farm.builder()
             .name(request.name())
@@ -63,6 +66,7 @@ public class FarmService {
         return saved;
     }
 
+    @Transactional
     public Farm updateFarm(String id, UpdateFarmRequest request) {
         Farm farm = getFarmById(id);
 
@@ -86,6 +90,7 @@ public class FarmService {
         return PageResponse.from(farmRepository.findAll(spec, pageable));
     }
 
+    @Transactional
     public void deleteFarm(String id) {
         Farm farm = getFarmById(id);
         farmRepository.delete(farm);
