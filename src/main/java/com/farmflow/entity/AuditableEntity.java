@@ -12,7 +12,7 @@ import java.time.Instant;
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 @Getter
-@Setter
+@Setter(lombok.AccessLevel.PROTECTED)
 public abstract class AuditableEntity {
 
     @Id
