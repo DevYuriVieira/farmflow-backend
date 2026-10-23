@@ -24,6 +24,7 @@ public class ActivityDtos {
 
         String notes,
 
+        @jakarta.validation.constraints.PositiveOrZero(message = "Estimativa de custo não pode ser negativa")
         Double costEstimate
     ) {}
 
@@ -33,6 +34,7 @@ public class ActivityDtos {
         String date,
         String priority,
         String notes,
+        @jakarta.validation.constraints.PositiveOrZero(message = "Estimativa de custo não pode ser negativa")
         Double costEstimate,
         Boolean completed
     ) {}
