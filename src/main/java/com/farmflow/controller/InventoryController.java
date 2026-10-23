@@ -50,7 +50,7 @@ public class InventoryController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<InventoryItem> updateItem(
         @PathVariable String id,
-        @RequestBody UpdateInventoryRequest request
+        @Valid @RequestBody UpdateInventoryRequest request
     ) {
         return ResponseEntity.ok(inventoryService.updateItem(id, request));
     }
