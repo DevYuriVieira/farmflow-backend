@@ -117,6 +117,10 @@ public class OutboxService {
     @Transactional
     public void markProcessed(String messageId) {
         outboxRepository.findById(messageId).ifPresent(message -> {
+            if (message.getStatus() == OutboxStatus.DEAD) {
+                log.warn("Cannot mark DEAD outbox message as PUBLISHED: messageId={}", messageId);
+                return;
+            }
             message.setStatus(OutboxStatus.PUBLISHED);
             message.setProcessedOn(Instant.now());
             outboxRepository.save(message);
