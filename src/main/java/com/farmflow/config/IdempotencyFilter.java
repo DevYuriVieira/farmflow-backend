@@ -1,5 +1,6 @@
 package com.farmflow.config;
 
+import com.farmflow.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,12 +11,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -49,13 +55,13 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String key = resolveIdempotencyKey(request);
-        if (key == null || key.isBlank()) {
+        String rawKey = resolveIdempotencyKey(request);
+        if (rawKey == null || rawKey.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        if (key.length() > 128) {
+        if (rawKey.length() > 128) {
             sendError(response, request.getRequestURI(), HttpStatus.BAD_REQUEST, "Idempotency-Key header cannot exceed 128 characters.");
             return;
         }
@@ -63,17 +69,35 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         long now = System.currentTimeMillis();
         evictStaleEntries(now);
 
-        IdempotencyRecord existing = storage.putIfAbsent(key, IdempotencyRecord.inProgress(now));
+        String principalId = resolvePrincipalId();
+        String method = request.getMethod().toUpperCase();
+        String path = request.getRequestURI();
+        String storageKey = principalId + ":" + method + ":" + path + ":" + rawKey;
+
+        IdempotencyRecord existing = storage.get(storageKey);
+        if (existing != null && (now - existing.createdAt() > DEFAULT_TTL_MS)) {
+            storage.remove(storageKey);
+            existing = null;
+        }
+
         if (existing != null) {
             if (existing.inProgress()) {
                 sendError(response, request.getRequestURI(), HttpStatus.CONFLICT, "A request with the provided Idempotency-Key is currently being processed.");
                 return;
             }
+
+            byte[] incomingBody = request.getInputStream().readAllBytes();
+            String incomingHash = computeSha256(incomingBody);
+            if (existing.requestHash() != null && !existing.requestHash().equals(incomingHash)) {
+                sendError(response, request.getRequestURI(), HttpStatus.UNPROCESSABLE_ENTITY, "Request payload does not match the original request for this Idempotency-Key.");
+                return;
+            }
+
             response.setStatus(existing.status());
             if (existing.contentType() != null) {
                 response.setContentType(existing.contentType());
             }
-            response.setHeader(IDEMPOTENCY_KEY_HEADER, key);
+            response.setHeader(IDEMPOTENCY_KEY_HEADER, rawKey);
             response.setHeader(IDEMPOTENCY_REPLAYED_HEADER, "true");
             if (existing.body() != null && existing.body().length > 0) {
                 response.getOutputStream().write(existing.body());
@@ -81,26 +105,75 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
+        IdempotencyRecord previous = storage.putIfAbsent(storageKey, IdempotencyRecord.inProgress(now));
+        if (previous != null) {
+            sendError(response, request.getRequestURI(), HttpStatus.CONFLICT, "A request with the provided Idempotency-Key is currently being processed.");
+            return;
+        }
+
+        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request, 1024 * 1024);
         CachedResponseWrapper wrappedResponse = new CachedResponseWrapper(response);
         boolean completed = false;
         try {
-            filterChain.doFilter(request, wrappedResponse);
-            byte[] body = wrappedResponse.toByteArray();
+            filterChain.doFilter(cachingRequest, wrappedResponse);
             int status = wrappedResponse.getStatus();
+            byte[] responseBody = wrappedResponse.toByteArray();
             String contentType = wrappedResponse.getContentType();
 
-            storage.put(key, new IdempotencyRecord(status, contentType, body, false, now));
-            completed = true;
+            if (status >= 500) {
+                storage.remove(storageKey);
+            } else {
+                byte[] requestBody = cachingRequest.getContentAsByteArray();
+                String requestHash = computeSha256(requestBody);
+                storage.put(storageKey, new IdempotencyRecord(status, contentType, responseBody, requestHash, false, now));
+                completed = true;
+            }
 
-            response.setHeader(IDEMPOTENCY_KEY_HEADER, key);
+            response.setHeader(IDEMPOTENCY_KEY_HEADER, rawKey);
             response.setHeader(IDEMPOTENCY_REPLAYED_HEADER, "false");
-            if (body.length > 0) {
-                response.getOutputStream().write(body);
+            if (responseBody.length > 0) {
+                response.getOutputStream().write(responseBody);
             }
         } finally {
             if (!completed) {
-                storage.remove(key);
+                storage.remove(storageKey);
             }
+        }
+    }
+
+    private String resolvePrincipalId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getPrincipal() == null) {
+            return "anonymous";
+        }
+        Object principal = auth.getPrincipal();
+        if (principal instanceof User user) {
+            return user.getId();
+        }
+        if (principal instanceof UserPrincipal userPrincipal) {
+            return userPrincipal.getId();
+        }
+        if (auth.getName() != null && !auth.getName().isBlank()) {
+            return auth.getName();
+        }
+        return "anonymous";
+    }
+
+    private String computeSha256(byte[] data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(data != null ? data : new byte[0]);
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
         }
     }
 
@@ -148,11 +221,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             int status,
             String contentType,
             byte[] body,
+            String requestHash,
             boolean inProgress,
             long createdAt
     ) {
         static IdempotencyRecord inProgress(long now) {
-            return new IdempotencyRecord(0, null, null, true, now);
+            return new IdempotencyRecord(0, null, null, null, true, now);
         }
     }
 

@@ -191,4 +191,120 @@ class IdempotencyFilterTest {
         assertEquals(HttpStatus.CREATED.value(), res2.getStatus());
         assertEquals("false", res2.getHeader(IdempotencyFilter.IDEMPOTENCY_REPLAYED_HEADER));
     }
+
+    @Test
+    void shouldIsolateIdempotencyKeysBetweenDifferentPrincipals() throws ServletException, IOException {
+        String key = "shared-key-123";
+
+        UserPrincipal user1 = UserPrincipal.builder().id("user-1").email("u1@farmflow.com").role("OWNER").build();
+        UserPrincipal user2 = UserPrincipal.builder().id("user-2").email("u2@farmflow.com").role("OWNER").build();
+
+        doAnswer(invocation -> {
+            HttpServletResponse res = invocation.getArgument(1);
+            res.setStatus(HttpStatus.CREATED.value());
+            res.getWriter().write("{\"owner\":\"user-1\"}");
+            return null;
+        }).when(filterChain).doFilter(any(ServletRequest.class), any(ServletResponse.class));
+
+        MockHttpServletRequest req1 = new MockHttpServletRequest("POST", "/machinery");
+        req1.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        req1.setContent("{\"data\":\"common\"}".getBytes());
+        MockHttpServletResponse res1 = new MockHttpServletResponse();
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user1, null)
+        );
+        filter.doFilter(req1, res1, filterChain);
+        assertEquals(HttpStatus.CREATED.value(), res1.getStatus());
+        assertEquals("false", res1.getHeader(IdempotencyFilter.IDEMPOTENCY_REPLAYED_HEADER));
+
+        doAnswer(invocation -> {
+            HttpServletResponse res = invocation.getArgument(1);
+            res.setStatus(HttpStatus.CREATED.value());
+            res.getWriter().write("{\"owner\":\"user-2\"}");
+            return null;
+        }).when(filterChain).doFilter(any(ServletRequest.class), any(ServletResponse.class));
+
+        MockHttpServletRequest req2 = new MockHttpServletRequest("POST", "/machinery");
+        req2.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        req2.setContent("{\"data\":\"common\"}".getBytes());
+        MockHttpServletResponse res2 = new MockHttpServletResponse();
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user2, null)
+        );
+        filter.doFilter(req2, res2, filterChain);
+
+        assertEquals(HttpStatus.CREATED.value(), res2.getStatus());
+        assertEquals("false", res2.getHeader(IdempotencyFilter.IDEMPOTENCY_REPLAYED_HEADER));
+        assertTrue(res2.getContentAsString().contains("user-2"));
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldRejectDuplicateRequestWhenPayloadDiffersWith422() throws ServletException, IOException {
+        String key = "txn-payload-mismatch";
+
+        MockHttpServletRequest req1 = new MockHttpServletRequest("POST", "/machinery");
+        req1.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        req1.setContent("{\"name\":\"Tractor 1\"}".getBytes());
+        MockHttpServletResponse res1 = new MockHttpServletResponse();
+
+        doAnswer(invocation -> {
+            ServletRequest req = invocation.getArgument(0);
+            req.getInputStream().readAllBytes();
+            HttpServletResponse res = invocation.getArgument(1);
+            res.setStatus(HttpStatus.CREATED.value());
+            res.getWriter().write("{\"id\":\"1\"}");
+            return null;
+        }).when(filterChain).doFilter(any(ServletRequest.class), any(ServletResponse.class));
+
+        filter.doFilter(req1, res1, filterChain);
+        assertEquals(HttpStatus.CREATED.value(), res1.getStatus());
+
+        MockHttpServletRequest req2 = new MockHttpServletRequest("POST", "/machinery");
+        req2.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        req2.setContent("{\"name\":\"Tractor DIFFERENT\"}".getBytes());
+        MockHttpServletResponse res2 = new MockHttpServletResponse();
+
+        filter.doFilter(req2, res2, filterChain);
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY.value(), res2.getStatus());
+        assertEquals("application/problem+json", res2.getContentType());
+        assertTrue(res2.getContentAsString().contains("Request payload does not match"));
+    }
+
+    @Test
+    void shouldNotCache5xxResponsesAndAllowRetry() throws ServletException, IOException {
+        String key = "txn-server-error-500";
+
+        MockHttpServletRequest req1 = new MockHttpServletRequest("POST", "/machinery");
+        req1.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        MockHttpServletResponse res1 = new MockHttpServletResponse();
+
+        doAnswer(invocation -> {
+            HttpServletResponse res = invocation.getArgument(1);
+            res.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+            res.getWriter().write("{\"error\":\"Internal Server Error\"}");
+            return null;
+        }).when(filterChain).doFilter(any(ServletRequest.class), any(ServletResponse.class));
+
+        filter.doFilter(req1, res1, filterChain);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR.value(), res1.getStatus());
+
+        MockHttpServletRequest req2 = new MockHttpServletRequest("POST", "/machinery");
+        req2.addHeader(IdempotencyFilter.IDEMPOTENCY_KEY_HEADER, key);
+        MockHttpServletResponse res2 = new MockHttpServletResponse();
+
+        doAnswer(invocation -> {
+            HttpServletResponse res = invocation.getArgument(1);
+            res.setStatus(HttpStatus.CREATED.value());
+            res.getWriter().write("{\"id\":\"m-retry-ok\"}");
+            return null;
+        }).when(filterChain).doFilter(any(ServletRequest.class), any(ServletResponse.class));
+
+        filter.doFilter(req2, res2, filterChain);
+        assertEquals(HttpStatus.CREATED.value(), res2.getStatus());
+        assertEquals("false", res2.getHeader(IdempotencyFilter.IDEMPOTENCY_REPLAYED_HEADER));
+        assertTrue(res2.getContentAsString().contains("m-retry-ok"));
+    }
 }
