@@ -33,4 +33,39 @@ public class Farm extends AuditableEntity {
 
     @Builder.Default
     private String status = "active";
+
+    public void updateDetails(
+            String name,
+            String location,
+            Double totalAreaHectares,
+            String primaryCrop,
+            String ownerName,
+            String contactPhone,
+            String status
+    ) {
+        if (name != null && !name.isBlank()) {
+            this.name = name;
+        }
+        if (location != null && !location.isBlank()) {
+            this.location = location;
+        }
+        if (totalAreaHectares != null) {
+            if (totalAreaHectares <= 0.0) {
+                throw new com.farmflow.exceptions.BusinessException("Total area must be strictly positive.");
+            }
+            this.totalAreaHectares = totalAreaHectares;
+        }
+        if (primaryCrop != null && !primaryCrop.isBlank()) {
+            this.primaryCrop = primaryCrop;
+        }
+        if (ownerName != null && !ownerName.isBlank()) {
+            this.ownerName = ownerName;
+        }
+        if (contactPhone != null) {
+            this.contactPhone = contactPhone;
+        }
+        if (status != null && !status.isBlank()) {
+            this.status = status;
+        }
+    }
 }
