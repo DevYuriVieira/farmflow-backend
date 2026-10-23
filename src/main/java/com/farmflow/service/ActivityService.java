@@ -81,16 +81,17 @@ public class ActivityService {
             request.notes(),
             request.costEstimate()
         );
+        boolean transitionedToCompleted = false;
         if (request.completed() != null) {
             if (Boolean.TRUE.equals(request.completed())) {
-                activity.complete();
+                transitionedToCompleted = activity.complete();
             } else {
                 activity.reopen();
             }
         }
 
         FarmActivity saved = activityRepository.save(activity);
-        if (Boolean.TRUE.equals(saved.getCompleted())) {
+        if (transitionedToCompleted) {
             ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
             outboxService.recordEvent("ActivityCompleted", event);
             eventPublisher.publishEvent(event);
@@ -101,13 +102,14 @@ public class ActivityService {
     @Transactional
     public FarmActivity toggleStatus(String id, boolean completed) {
         FarmActivity activity = getActivityById(id);
+        boolean transitionedToCompleted = false;
         if (completed) {
-            activity.complete();
+            transitionedToCompleted = activity.complete();
         } else {
             activity.reopen();
         }
         FarmActivity saved = activityRepository.save(activity);
-        if (completed) {
+        if (transitionedToCompleted) {
             ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
             outboxService.recordEvent("ActivityCompleted", event);
             eventPublisher.publishEvent(event);
