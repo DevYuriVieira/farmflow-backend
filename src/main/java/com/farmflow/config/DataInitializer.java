@@ -187,7 +187,7 @@ public class DataInitializer implements CommandLineRunner {
             .detectedAt(Instant.now().minusSeconds(86400))
             .build());
 
-        log.info("✅ Dados e módulos agrícolas inicializados! E-mail: admin@farmflow.com | Senha: admin123");
+        log.info("✅ Dados e módulos agrícolas inicializados para ambiente de desenvolvimento: admin@farmflow.com");
     }
 }
 
