@@ -6,3 +6,5 @@ ALTER TABLE inventory_items RENAME COLUMN min_threshold TO minimum_threshold;
 ALTER TABLE inventory_items ALTER COLUMN minimum_threshold DROP NOT NULL;
 
 ALTER TABLE pest_records RENAME TO pest_scouting_records;
+
+ALTER TABLE processed_messages ALTER COLUMN message_id TYPE VARCHAR(100);
