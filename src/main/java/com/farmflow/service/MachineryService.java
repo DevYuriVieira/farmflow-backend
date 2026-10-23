@@ -102,7 +102,6 @@ public class MachineryService {
         if (request.nextMaintenanceDate() != null) {
             machinery.scheduleNextMaintenance(request.nextMaintenanceDate());
         }
-        machinery.setUpdatedAt(Instant.now());
 
         Machinery saved = machineryRepository.save(machinery);
         dispatchDomainEvents(saved);
@@ -122,7 +121,6 @@ public class MachineryService {
             request != null ? request.reason() : null,
             request != null ? request.expectedDate() : null
         );
-        machinery.setUpdatedAt(Instant.now());
         Machinery saved = machineryRepository.save(machinery);
         dispatchDomainEvents(saved);
         return saved;
@@ -132,7 +130,6 @@ public class MachineryService {
     public Machinery returnFromMaintenance(String id, ReturnFromMaintenanceRequest request) {
         Machinery machinery = getMachineryById(id);
         machinery.returnFromMaintenance(request != null ? request.newOperatingHours() : null);
-        machinery.setUpdatedAt(Instant.now());
         Machinery saved = machineryRepository.save(machinery);
         dispatchDomainEvents(saved);
         return saved;
@@ -143,7 +140,6 @@ public class MachineryService {
         Machinery machinery = getMachineryById(id);
         if (request != null && request.operatingHours() != null) {
             machinery.updateOperatingHours(request.operatingHours());
-            machinery.setUpdatedAt(Instant.now());
             Machinery saved = machineryRepository.save(machinery);
             dispatchDomainEvents(saved);
             return saved;
@@ -155,7 +151,6 @@ public class MachineryService {
     public Machinery deactivate(String id) {
         Machinery machinery = getMachineryById(id);
         machinery.deactivate();
-        machinery.setUpdatedAt(Instant.now());
         Machinery saved = machineryRepository.save(machinery);
         dispatchDomainEvents(saved);
         return saved;
@@ -165,7 +160,6 @@ public class MachineryService {
     public Machinery activate(String id) {
         Machinery machinery = getMachineryById(id);
         machinery.activate();
-        machinery.setUpdatedAt(Instant.now());
         Machinery saved = machineryRepository.save(machinery);
         dispatchDomainEvents(saved);
         return saved;
