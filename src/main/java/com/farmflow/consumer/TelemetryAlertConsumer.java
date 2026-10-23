@@ -72,7 +72,11 @@ public class TelemetryAlertConsumer {
         } catch (Exception e) {
             log.error("Error processing telemetry alert message {}: {}", messageId, e.getMessage(), e);
             farmFlowMetrics.incrementConsumerFailed("TelemetryAlert");
-            retryRouter.routeFailure(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "telemetry.alerts", e);
+            if (e instanceof IllegalArgumentException || e.getCause() instanceof IllegalArgumentException) {
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, e.getMessage());
+            } else {
+                retryRouter.routeFailure(message, RabbitMqTopologyConfig.TELEMETRY_ALERTS_QUEUE, "telemetry.alerts", e);
+            }
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
             MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
@@ -82,9 +86,15 @@ public class TelemetryAlertConsumer {
     private void applyBusinessEffect(String payload, String messageId) {
         try {
             JsonNode root = objectMapper.readTree(payload);
-            String sensorId = root.hasNonNull("sensorId") ? root.get("sensorId").asText() : "unknown-sensor";
-            String farmId = root.hasNonNull("farmId") ? root.get("farmId").asText() : "farm-default";
-            String plantationId = root.hasNonNull("plantationId") ? root.get("plantationId").asText() : "plantation-default";
+            JsonNode readingNode = root.has("reading") ? root.get("reading") : root;
+
+            String sensorId = readingNode.hasNonNull("sensorId") ? readingNode.get("sensorId").asText() : "unknown-sensor";
+            String farmId = readingNode.hasNonNull("farmId") ? readingNode.get("farmId").asText() : null;
+            String plantationId = readingNode.hasNonNull("plantationId") ? readingNode.get("plantationId").asText() : "unassigned";
+
+            if (farmId == null || farmId.isBlank()) {
+                throw new IllegalArgumentException("Missing required farmId in telemetry alert payload: " + payload);
+            }
 
             FarmActivity activity = FarmActivity.builder()
                     .farmId(farmId)
@@ -98,6 +108,8 @@ public class TelemetryAlertConsumer {
                     .build();
 
             activityRepository.save(activity);
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply telemetry alert business effect for message " + messageId, e);
         }
