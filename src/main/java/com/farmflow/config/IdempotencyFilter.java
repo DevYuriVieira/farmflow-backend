@@ -206,7 +206,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         response.setContentType("application/problem+json");
 
         Map<String, Object> problem = new LinkedHashMap<>();
-        problem.put("type", "https://tools.ietf.org/html/rfc9457");
+        problem.put("type", "urn:problem-type:farmflow:idempotency-conflict");
         problem.put("title", status.getReasonPhrase());
         problem.put("status", status.value());
         problem.put("detail", detail);
