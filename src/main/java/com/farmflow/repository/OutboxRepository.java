@@ -42,6 +42,13 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, String> {
 
     long countByProcessedOnIsNull();
 
+    @Query("SELECT COUNT(m) FROM OutboxMessage m WHERE m.status IN (com.farmflow.enums.OutboxStatus.PENDING, com.farmflow.enums.OutboxStatus.PROCESSING)")
+    long countPendingBacklog();
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM OutboxMessage m WHERE m.status = com.farmflow.enums.OutboxStatus.PUBLISHED AND m.processedOn < :cutoff")
+    int deleteProcessedOlderThan(@Param("cutoff") Instant cutoff);
+
     long countByStatus(OutboxStatus status);
 
     @Query("SELECT MIN(m.occurredOn) FROM OutboxMessage m WHERE m.processedOn IS NULL AND m.status != com.farmflow.enums.OutboxStatus.DEAD")
