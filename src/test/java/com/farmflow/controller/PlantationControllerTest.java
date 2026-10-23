@@ -32,12 +32,14 @@ class PlantationControllerTest {
     @Autowired
     private FarmRepository farmRepository;
 
+    @Autowired
+    private com.farmflow.repository.UserRepository userRepository;
+
     private String validJwtToken;
     private Farm testFarm;
 
     @BeforeEach
     void setUp() {
-        validJwtToken = "Bearer " + jwtTokenProvider.generateToken("user-test-id", "test@farmflow.com", "owner");
         testFarm = farmRepository.save(Farm.builder()
             .name("Fazenda Talhao Test")
             .location("Campinas, SP")
@@ -45,6 +47,18 @@ class PlantationControllerTest {
             .primaryCrop("Soja")
             .ownerName("Yuri Vieira")
             .build());
+
+        com.farmflow.entity.User testUser = userRepository.findByEmail("test@farmflow.com")
+                .orElseGet(() -> userRepository.save(com.farmflow.entity.User.builder()
+                        .name("Test User")
+                        .email("test@farmflow.com")
+                        .password("secret")
+                        .role("OWNER")
+                        .farmId(testFarm.getId())
+                        .build()));
+        testUser.setFarmId(testFarm.getId());
+        userRepository.save(testUser);
+        validJwtToken = "Bearer " + jwtTokenProvider.generateToken(testUser.getId(), testUser.getEmail(), testUser.getRole());
     }
 
     @Test

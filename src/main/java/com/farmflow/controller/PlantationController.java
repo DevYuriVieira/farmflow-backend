@@ -23,6 +23,7 @@ public class PlantationController {
     private final PlantationService plantationService;
 
     @GetMapping("/paged")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or (#farmId != null and @farmSecurity.hasFarmAccess(#farmId)) or (#farmId == null and isAuthenticated())")
     public ResponseEntity<PageResponse<Plantation>> getPlantationsPaged(
         @RequestParam(required = false) String farmId,
         @RequestParam(required = false) String status,
@@ -33,6 +34,7 @@ public class PlantationController {
     }
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or (#farmId != null and @farmSecurity.hasFarmAccess(#farmId)) or (#farmId == null and isAuthenticated())")
     public ResponseEntity<List<Plantation>> getPlantations(
         @RequestParam(required = false) String farmId,
         @RequestParam(required = false) String status
@@ -41,16 +43,19 @@ public class PlantationController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Plantation> getPlantationById(@PathVariable String id) {
         return ResponseEntity.ok(plantationService.getPlantationById(id));
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#request.farmId())")
     public ResponseEntity<Plantation> createPlantation(@Valid @RequestBody CreatePlantationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(plantationService.createPlantation(request));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Plantation> updatePlantation(
         @PathVariable String id,
         @RequestBody UpdatePlantationRequest request
@@ -59,6 +64,7 @@ public class PlantationController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deletePlantation(@PathVariable String id) {
         plantationService.deletePlantation(id);
         return ResponseEntity.noContent().build();

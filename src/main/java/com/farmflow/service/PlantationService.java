@@ -20,22 +20,33 @@ import java.util.List;
 public class PlantationService {
 
     private final PlantationRepository plantationRepository;
+    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
 
     public List<Plantation> getPlantations(String farmId, String status) {
-        if (farmId != null && status != null && !status.isBlank()) {
-            return plantationRepository.findByFarmIdAndStatus(farmId, PlantationStatus.fromString(status));
-        } else if (farmId != null) {
-            return plantationRepository.findByFarmId(farmId);
+        String effectiveFarmId = farmId;
+        if (!farmSecurity.isAdmin() && effectiveFarmId == null) {
+            effectiveFarmId = farmSecurity.getCurrentUserFarmId();
         }
-        return plantationRepository.findAll();
+        if (effectiveFarmId != null && status != null && !status.isBlank()) {
+            return plantationRepository.findByFarmIdAndStatus(effectiveFarmId, PlantationStatus.fromString(status));
+        } else if (effectiveFarmId != null) {
+            return plantationRepository.findByFarmId(effectiveFarmId);
+        }
+        if (farmSecurity.isAdmin()) {
+            return plantationRepository.findAll();
+        }
+        return List.of();
     }
 
     public Plantation getPlantationById(String id) {
-        return plantationRepository.findById(id)
+        Plantation plantation = plantationRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Talhão não encontrado"));
+        farmSecurity.validateTenantAccess(plantation.getFarmId());
+        return plantation;
     }
 
     public Plantation createPlantation(CreatePlantationRequest request) {
+        farmSecurity.validateTenantAccess(request.farmId());
         Plantation plantation = Plantation.builder()
             .farmId(request.farmId())
             .name(request.name())
