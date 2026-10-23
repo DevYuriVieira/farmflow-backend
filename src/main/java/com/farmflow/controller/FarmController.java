@@ -23,6 +23,7 @@ public class FarmController {
     private final FarmService farmService;
 
     @GetMapping("/paged")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageResponse<Farm>> getFarmsPaged(
         @RequestParam(required = false) String name,
         @RequestParam(required = false) String location,
@@ -33,21 +34,25 @@ public class FarmController {
     }
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Farm>> getAllFarms() {
         return ResponseEntity.ok(farmService.getAllFarms());
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#id)")
     public ResponseEntity<Farm> getFarmById(@PathVariable String id) {
         return ResponseEntity.ok(farmService.getFarmById(id));
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ResponseEntity<Farm> createFarm(@Valid @RequestBody CreateFarmRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(farmService.createFarm(request));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#id)")
     public ResponseEntity<Farm> updateFarm(
         @PathVariable String id,
         @RequestBody UpdateFarmRequest request
@@ -56,6 +61,7 @@ public class FarmController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#id)")
     public ResponseEntity<Void> deleteFarm(@PathVariable String id) {
         farmService.deleteFarm(id);
         return ResponseEntity.noContent().build();

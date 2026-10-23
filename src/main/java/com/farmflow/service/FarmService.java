@@ -19,12 +19,22 @@ import org.springframework.data.jpa.domain.Specification;
 public class FarmService {
 
     private final FarmRepository farmRepository;
+    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
+    private final com.farmflow.repository.UserRepository userRepository;
 
     public List<Farm> getAllFarms() {
+        if (farmSecurity.isAdmin()) {
+            return farmRepository.findAll();
+        }
+        String farmId = farmSecurity.getCurrentUserFarmId();
+        if (farmId != null) {
+            return farmRepository.findById(farmId).map(List::of).orElse(List.of());
+        }
         return farmRepository.findAll();
     }
 
     public Farm getFarmById(String id) {
+        farmSecurity.validateTenantAccess(id);
         return farmRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fazenda não encontrada"));
     }
@@ -40,7 +50,17 @@ public class FarmService {
             .status("active")
             .build();
 
-        return farmRepository.save(farm);
+        Farm saved = farmRepository.save(farm);
+
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.farmflow.entity.User user) {
+            if (user.getFarmId() == null) {
+                user.setFarmId(saved.getId());
+                userRepository.save(user);
+            }
+        }
+
+        return saved;
     }
 
     public Farm updateFarm(String id, UpdateFarmRequest request) {

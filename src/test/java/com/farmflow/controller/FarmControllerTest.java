@@ -94,6 +94,10 @@ class FarmControllerTest {
             .ownerName("Yuri Vieira")
             .build());
 
+        com.farmflow.entity.User testUser = userRepository.findByEmail("test@farmflow.com").orElseThrow();
+        testUser.setFarmId(farm.getId());
+        userRepository.save(testUser);
+
         mockMvc.perform(get("/farms/" + farm.getId())
                 .header("Authorization", validJwtToken))
             .andExpect(status().isOk())
