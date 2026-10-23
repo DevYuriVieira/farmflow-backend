@@ -88,13 +88,14 @@ class FarmActivityDomainTest {
                 .completed(false)
                 .build();
 
-        activity.complete();
-
+        boolean firstResult = activity.complete();
+        assertTrue(firstResult);
         assertTrue(activity.getCompleted());
         assertNotNull(activity.getCompletedAt());
 
         String firstCompletedAt = activity.getCompletedAt();
-        activity.complete();
+        boolean secondResult = activity.complete();
+        assertFalse(secondResult);
         assertEquals(firstCompletedAt, activity.getCompletedAt());
     }
 
