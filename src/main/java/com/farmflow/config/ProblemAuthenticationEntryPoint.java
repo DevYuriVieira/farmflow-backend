@@ -35,7 +35,7 @@ public class ProblemAuthenticationEntryPoint implements AuthenticationEntryPoint
         response.setContentType("application/problem+json");
 
         Map<String, Object> problem = new LinkedHashMap<>();
-        problem.put("type", "https://tools.ietf.org/html/rfc9457");
+        problem.put("type", "urn:problem-type:farmflow:unauthorized");
         problem.put("title", "Unauthorized");
         problem.put("status", HttpStatus.UNAUTHORIZED.value());
         problem.put("detail", "Authentication credentials are required or invalid to access this resource.");
