@@ -49,7 +49,7 @@ public class MachineryController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> updateMachinery(
         @PathVariable String id,
-        @RequestBody UpdateMachineryRequest request
+        @Valid @RequestBody UpdateMachineryRequest request
     ) {
         return ResponseEntity.ok(machineryService.updateMachinery(id, request));
     }
@@ -74,7 +74,7 @@ public class MachineryController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> returnFromMaintenance(
         @PathVariable String id,
-        @RequestBody(required = false) ReturnFromMaintenanceRequest request
+        @Valid @RequestBody(required = false) ReturnFromMaintenanceRequest request
     ) {
         return ResponseEntity.ok(machineryService.returnFromMaintenance(id, request));
     }
@@ -83,7 +83,7 @@ public class MachineryController {
     @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Machinery> updateOperatingHours(
         @PathVariable String id,
-        @RequestBody UpdateOperatingHoursRequest request
+        @Valid @RequestBody UpdateOperatingHoursRequest request
     ) {
         return ResponseEntity.ok(machineryService.updateOperatingHours(id, request));
     }
