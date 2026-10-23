@@ -55,4 +55,40 @@ public class FarmSecurityEvaluator {
         }
         return false;
     }
+
+    public String getCurrentUserFarmId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return null;
+        }
+        Object principal = auth.getPrincipal();
+        if (principal instanceof User user) {
+            return user.getFarmId();
+        }
+        if (principal instanceof UserPrincipal userPrincipal) {
+            return userPrincipal.getFarmId();
+        }
+        return null;
+    }
+
+    public boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        Object principal = auth.getPrincipal();
+        if (principal instanceof User user) {
+            return "ADMIN".equalsIgnoreCase(user.getRole());
+        }
+        if (principal instanceof UserPrincipal userPrincipal) {
+            return "ADMIN".equalsIgnoreCase(userPrincipal.getRole());
+        }
+        return false;
+    }
+
+    public void validateTenantAccess(String resourceFarmId) {
+        if (resourceFarmId == null || !hasFarmAccess(resourceFarmId)) {
+            throw new com.farmflow.exceptions.ResourceNotFoundException("Recurso não encontrado");
+        }
+    }
 }

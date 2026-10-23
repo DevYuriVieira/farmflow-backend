@@ -184,4 +184,56 @@ class FarmSecurityEvaluatorTest {
         assertTrue(evaluator.isCurrentUser("principal-999"));
         assertFalse(evaluator.isCurrentUser("principal-000"));
     }
+
+    @Test
+    void shouldValidateTenantAccessSuccessfullyWhenAuthorized() {
+        User user = User.builder()
+                .name("Farmer")
+                .role("OPERATOR")
+                .farmId("farm-100")
+                .build();
+        user.setId("user-100");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null)
+        );
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> evaluator.validateTenantAccess("farm-100"));
+    }
+
+    @Test
+    void shouldThrowResourceNotFoundExceptionOnValidateTenantAccessWhenUnauthorized() {
+        User user = User.builder()
+                .name("Farmer")
+                .role("OPERATOR")
+                .farmId("farm-100")
+                .build();
+        user.setId("user-100");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null)
+        );
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.farmflow.exceptions.ResourceNotFoundException.class,
+                () -> evaluator.validateTenantAccess("farm-different")
+        );
+    }
+
+    @Test
+    void shouldReturnCorrectAdminStatusAndFarmId() {
+        User user = User.builder()
+                .name("Admin")
+                .role("ADMIN")
+                .farmId("farm-admin")
+                .build();
+        user.setId("admin-1");
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null)
+        );
+
+        assertTrue(evaluator.isAdmin());
+        org.junit.jupiter.api.Assertions.assertEquals("farm-admin", evaluator.getCurrentUserFarmId());
+    }
 }
