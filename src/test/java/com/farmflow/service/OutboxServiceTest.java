@@ -204,4 +204,36 @@ class OutboxServiceTest {
         assertThrows(IllegalArgumentException.class, () -> outboxService.resolveRoutingKey(null));
         assertThrows(IllegalArgumentException.class, () -> outboxService.resolveRoutingKey("   "));
     }
+
+    @Test
+    void shouldReturnBacklogCountFromPendingBacklogQuery() {
+        when(outboxRepository.countPendingBacklog()).thenReturn(7L);
+        assertEquals(7L, outboxService.getBacklogCount());
+        verify(outboxRepository, times(1)).countPendingBacklog();
+    }
+
+    @Test
+    void shouldPurgePublishedMessagesOlderThanRetentionAge() {
+        when(outboxRepository.deleteProcessedOlderThan(any(Instant.class))).thenReturn(12);
+        int purged = outboxService.purgePublishedMessages(java.time.Duration.ofDays(7));
+        assertEquals(12, purged);
+        verify(outboxRepository, times(1)).deleteProcessedOlderThan(any(Instant.class));
+    }
+
+    @Test
+    void shouldIncrementAttemptsAndKillPoisonMessageWhenReclaimingExpiredProcessingLease() {
+        OutboxMessage poisonMsg = OutboxMessage.builder()
+                .id("poison-msg")
+                .status(com.farmflow.enums.OutboxStatus.PROCESSING)
+                .attempts(2)
+                .build();
+        when(outboxRepository.findPendingForClaim(any(), eq(3), eq(10))).thenReturn(List.of(poisonMsg));
+
+        List<OutboxMessage> claimed = outboxService.fetchAndClaimBatch(3, 10);
+
+        assertTrue(claimed.isEmpty());
+        assertEquals(3, poisonMsg.getAttempts());
+        assertEquals(com.farmflow.enums.OutboxStatus.DEAD, poisonMsg.getStatus());
+        verify(outboxRepository, times(1)).saveAll(any());
+    }
 }
