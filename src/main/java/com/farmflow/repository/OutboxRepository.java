@@ -28,18 +28,6 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, String> {
             @Param("batchSize") int batchSize
     );
 
-    @Query(value = """
-        SELECT * FROM outbox_messages
-        WHERE processed_on IS NULL AND attempts < :maxAttempts
-        ORDER BY occurred_on
-        LIMIT :batchSize
-        FOR UPDATE SKIP LOCKED
-        """, nativeQuery = true)
-    List<OutboxMessage> findUnprocessedForUpdateSkipLocked(
-            @Param("maxAttempts") int maxAttempts,
-            @Param("batchSize") int batchSize
-    );
-
     long countByProcessedOnIsNull();
 
     @Query("SELECT COUNT(m) FROM OutboxMessage m WHERE m.status IN (com.farmflow.enums.OutboxStatus.PENDING, com.farmflow.enums.OutboxStatus.PROCESSING)")
