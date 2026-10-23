@@ -2,6 +2,7 @@ package com.farmflow.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class AuthDtos {
 
@@ -23,6 +24,7 @@ public class AuthDtos {
         String email,
 
         @NotBlank(message = "Senha é obrigatória")
+        @Size(min = 8, max = 128, message = "Senha deve conter entre 8 e 128 caracteres")
         String password
     ) {}
 
@@ -51,6 +53,7 @@ public class AuthDtos {
         String currentPassword,
 
         @NotBlank(message = "Nova senha é obrigatória")
+        @Size(min = 8, max = 128, message = "Nova senha deve conter entre 8 e 128 caracteres")
         String newPassword
     ) {}
 }
