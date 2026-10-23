@@ -26,12 +26,12 @@ public enum PlantationStatus {
 
     public static PlantationStatus fromString(String value) {
         if (value == null || value.isBlank()) {
-            return PLANTED;
+            throw new com.farmflow.exceptions.BusinessException("Plantation status cannot be null or blank");
         }
         try {
             return PlantationStatus.valueOf(value.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return PLANTED;
+            throw new com.farmflow.exceptions.BusinessException("Invalid plantation status: " + value);
         }
     }
 }
