@@ -36,9 +36,6 @@ class FailureInjectionAndResilienceTest {
     private OutboxService outboxService;
 
     @Mock
-    private ApplicationEventPublisher localEventPublisher;
-
-    @Mock
     private RabbitMqEventPublisher rabbitMqEventPublisher;
 
     @Mock

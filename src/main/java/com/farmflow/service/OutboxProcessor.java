@@ -5,7 +5,6 @@ import com.farmflow.entity.OutboxMessage;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +20,6 @@ public class OutboxProcessor {
     private static final int BATCH_SIZE = 20;
 
     private final OutboxService outboxService;
-    private final ApplicationEventPublisher localEventPublisher;
     private final RabbitMqEventPublisher rabbitMqEventPublisher;
     private final FarmFlowMetrics farmFlowMetrics;
     private volatile long circuitOpenUntilTimestamp = 0;
@@ -49,7 +47,6 @@ public class OutboxProcessor {
 
             for (OutboxMessage message : messages) {
                 try {
-                    localEventPublisher.publishEvent(message);
                     String routingKey = resolveRoutingKey(message);
 
                     long startNanos = System.nanoTime();

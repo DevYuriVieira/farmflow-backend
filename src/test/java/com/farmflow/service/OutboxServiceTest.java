@@ -34,10 +34,9 @@ class OutboxServiceTest {
         outboxRepository = mock(OutboxRepository.class);
         objectMapper = new ObjectMapper();
         outboxService = new OutboxService(outboxRepository, objectMapper);
-        eventPublisher = mock(ApplicationEventPublisher.class);
         rabbitMqEventPublisher = mock(RabbitMqEventPublisher.class);
         farmFlowMetrics = mock(com.farmflow.config.FarmFlowMetrics.class);
-        outboxProcessor = new OutboxProcessor(outboxService, eventPublisher, rabbitMqEventPublisher, farmFlowMetrics);
+        outboxProcessor = new OutboxProcessor(outboxService, rabbitMqEventPublisher, farmFlowMetrics);
 
         MDC.put(CorrelationIdFilter.MDC_CORRELATION_ID_KEY, "trace-abc-123");
     }
@@ -125,7 +124,6 @@ class OutboxServiceTest {
 
         outboxProcessor.processOutboxMessages();
 
-        verify(eventPublisher, times(1)).publishEvent(msg);
         verify(rabbitMqEventPublisher, times(1)).publish(eq("pest.detected.warning"), eq(msg.getPayload()), eq("msg-batch-1"), isNull(), eq("trace-1"));
         assertNotNull(msg.getProcessedOn());
     }
