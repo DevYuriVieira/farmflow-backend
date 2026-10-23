@@ -33,11 +33,24 @@ class ActivityControllerTest {
     @Autowired
     private ActivityRepository activityRepository;
 
+    @Autowired
+    private com.farmflow.repository.UserRepository userRepository;
+
     private String validJwtToken;
 
     @BeforeEach
     void setUp() {
-        validJwtToken = "Bearer " + jwtTokenProvider.generateToken("user-test-id", "test@farmflow.com", "owner");
+        com.farmflow.entity.User testUser = userRepository.findByEmail("test@farmflow.com")
+                .orElseGet(() -> userRepository.save(com.farmflow.entity.User.builder()
+                        .name("Test User")
+                        .email("test@farmflow.com")
+                        .password("secret")
+                        .role("OWNER")
+                        .farmId("farm-123")
+                        .build()));
+        testUser.setFarmId("farm-123");
+        userRepository.save(testUser);
+        validJwtToken = "Bearer " + jwtTokenProvider.generateToken(testUser.getId(), testUser.getEmail(), testUser.getRole());
     }
 
     @Test
@@ -67,7 +80,7 @@ class ActivityControllerTest {
     void shouldToggleActivityStatus() throws Exception {
         var activity = activityRepository.save(FarmActivity.builder()
             .plantationId("plantation-test")
-            .farmId("farm-test")
+            .farmId("farm-123")
             .title("Vistoria de rotina")
             .type("scouting")
             .date("2026-10-20")

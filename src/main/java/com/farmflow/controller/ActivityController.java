@@ -23,6 +23,7 @@ public class ActivityController {
     private final ActivityService activityService;
 
     @GetMapping("/paged")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or (#farmId != null and @farmSecurity.hasFarmAccess(#farmId)) or (#farmId == null and isAuthenticated())")
     public ResponseEntity<PageResponse<FarmActivity>> getActivitiesPaged(
         @RequestParam(required = false) String farmId,
         @RequestParam(required = false) String plantationId,
@@ -34,6 +35,7 @@ public class ActivityController {
     }
 
     @GetMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or (#farmId != null and @farmSecurity.hasFarmAccess(#farmId)) or (#farmId == null and isAuthenticated())")
     public ResponseEntity<List<FarmActivity>> getActivities(
         @RequestParam(required = false) String plantationId,
         @RequestParam(required = false) String farmId,
@@ -43,16 +45,19 @@ public class ActivityController {
     }
 
     @GetMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<FarmActivity> getActivityById(@PathVariable String id) {
         return ResponseEntity.ok(activityService.getActivityById(id));
     }
 
     @PostMapping
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @farmSecurity.hasFarmAccess(#request.farmId())")
     public ResponseEntity<FarmActivity> createActivity(@Valid @RequestBody CreateActivityRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(activityService.createActivity(request));
     }
 
     @PutMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<FarmActivity> updateActivity(
         @PathVariable String id,
         @RequestBody UpdateActivityRequest request
@@ -61,6 +66,7 @@ public class ActivityController {
     }
 
     @PatchMapping("/{id}/status")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<FarmActivity> toggleActivityStatus(
         @PathVariable String id,
         @RequestBody ToggleStatusRequest request
@@ -69,6 +75,7 @@ public class ActivityController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteActivity(@PathVariable String id) {
         activityService.deleteActivity(id);
         return ResponseEntity.noContent().build();

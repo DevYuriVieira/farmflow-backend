@@ -24,25 +24,36 @@ public class ActivityService {
     private final ActivityRepository activityRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final OutboxService outboxService;
+    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
 
     public List<FarmActivity> getActivities(String plantationId, String farmId, Boolean completed) {
+        String effectiveFarmId = farmId;
+        if (!farmSecurity.isAdmin() && effectiveFarmId == null && plantationId == null) {
+            effectiveFarmId = farmSecurity.getCurrentUserFarmId();
+        }
         if (plantationId != null && completed != null) {
             return activityRepository.findByPlantationIdAndCompleted(plantationId, completed);
         } else if (plantationId != null) {
             return activityRepository.findByPlantationId(plantationId);
-        } else if (farmId != null) {
-            return activityRepository.findByFarmId(farmId);
+        } else if (effectiveFarmId != null) {
+            return activityRepository.findByFarmId(effectiveFarmId);
         }
-        return activityRepository.findAll();
+        if (farmSecurity.isAdmin()) {
+            return activityRepository.findAll();
+        }
+        return List.of();
     }
 
     public FarmActivity getActivityById(String id) {
-        return activityRepository.findById(id)
+        FarmActivity activity = activityRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Atividade não encontrada"));
+        farmSecurity.validateTenantAccess(activity.getFarmId());
+        return activity;
     }
 
     @Transactional
     public FarmActivity createActivity(CreateActivityRequest request) {
+        farmSecurity.validateTenantAccess(request.farmId());
         FarmActivity activity = FarmActivity.builder()
             .plantationId(request.plantationId())
             .farmId(request.farmId())
