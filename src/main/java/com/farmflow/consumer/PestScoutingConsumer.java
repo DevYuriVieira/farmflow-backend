@@ -79,7 +79,11 @@ public class PestScoutingConsumer {
         } catch (Exception e) {
             log.error("Error processing pest detected message {}: {}", messageId, e.getMessage(), e);
             farmFlowMetrics.incrementConsumerFailed("PestDetected");
-            retryRouter.routeFailure(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "pest.detected", e);
+            if (e instanceof IllegalArgumentException || e.getCause() instanceof IllegalArgumentException) {
+                retryRouter.routePoison(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, e.getMessage());
+            } else {
+                retryRouter.routeFailure(message, RabbitMqTopologyConfig.PEST_DETECTED_QUEUE, "pest.detected", e);
+            }
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
             MDC.remove(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
@@ -91,7 +95,13 @@ public class PestScoutingConsumer {
             JsonNode root = objectMapper.readTree(payload);
             JsonNode recordNode = root.has("record") ? root.get("record") : root;
 
-            String farmId = recordNode.hasNonNull("farmId") ? recordNode.get("farmId").asText() : "farm-default";
+            String farmId = recordNode.hasNonNull("farmId") ? recordNode.get("farmId").asText() :
+                    (root.hasNonNull("tenantId") ? root.get("tenantId").asText() : null);
+
+            if (farmId == null || farmId.isBlank()) {
+                throw new IllegalArgumentException("Missing required farmId in pest detected payload: " + payload);
+            }
+
             String plantationId = recordNode.hasNonNull("plantationId")
                     ? recordNode.get("plantationId").asText()
                     : (recordNode.hasNonNull("field") ? recordNode.get("field").asText() : "field-default");
@@ -111,6 +121,8 @@ public class PestScoutingConsumer {
                     .build();
 
             activityRepository.save(activity);
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply pest scouting business effect for message " + messageId, e);
         }
