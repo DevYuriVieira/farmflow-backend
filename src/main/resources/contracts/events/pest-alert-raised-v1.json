@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://farmflow.com/contracts/events/pest-alert-raised-v1.json",
+  "title": "PestAlertRaisedEvent",
+  "description": "CloudEvents schema for pest alert detection events in FarmFlow Scouting",
+  "type": "object",
+  "required": ["id", "source", "type", "specversion", "time", "tenantId", "correlationId", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.farmflow.pest.alert.raised.v1"
+    },
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": ["scoutingId", "farmId", "plantationId", "pestType", "severity", "observedAt"],
+      "properties": {
+        "scoutingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "farmId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plantationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pestType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        },
+        "recommendedAction": {
+          "type": ["string", "null"]
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

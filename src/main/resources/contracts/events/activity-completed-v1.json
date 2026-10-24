@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://farmflow.com/contracts/events/activity-completed-v1.json",
+  "title": "ActivityCompletedEvent",
+  "description": "CloudEvents schema for activity completion domain events in FarmFlow Agribusiness",
+  "type": "object",
+  "required": ["id", "source", "type", "specversion", "time", "tenantId", "correlationId", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.farmflow.activity.completed.v1"
+    },
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": ["activityId", "farmId", "activityType", "title", "completedAt"],
+      "properties": {
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "farmId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plantationId": {
+          "type": ["string", "null"]
+        },
+        "activityType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "inputsUsed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["itemId", "quantity", "unit"],
+            "properties": {
+              "itemId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "quantity": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
