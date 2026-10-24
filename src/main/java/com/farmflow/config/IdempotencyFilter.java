@@ -1,5 +1,8 @@
 package com.farmflow.config;
 
+import com.farmflow.config.idempotency.IdempotencyRecord;
+import com.farmflow.config.idempotency.IdempotencyStorage;
+import com.farmflow.config.idempotency.InMemoryIdempotencyStorage;
 import com.farmflow.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -10,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class IdempotencyFilter extends OncePerRequestFilter {
@@ -38,10 +41,18 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
     private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH");
     private static final long DEFAULT_TTL_MS = 86_400_000L;
-    private static final int MAX_CACHE_SIZE = 10000;
 
-    private final Map<String, IdempotencyRecord> storage = new ConcurrentHashMap<>();
+    private final IdempotencyStorage storage;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public IdempotencyFilter() {
+        this(new InMemoryIdempotencyStorage());
+    }
+
+    @Autowired
+    public IdempotencyFilter(@Autowired(required = false) IdempotencyStorage storage) {
+        this.storage = storage != null ? storage : new InMemoryIdempotencyStorage();
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -67,7 +78,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
 
         long now = System.currentTimeMillis();
-        evictStaleEntries(now);
+        storage.evictExpired(now, DEFAULT_TTL_MS);
 
         String principalId = resolvePrincipalId();
         String method = request.getMethod().toUpperCase();
@@ -105,8 +116,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
-        IdempotencyRecord previous = storage.putIfAbsent(storageKey, IdempotencyRecord.inProgress(now));
-        if (previous != null) {
+        boolean claimed = storage.putIfAbsentInProgress(storageKey, now);
+        if (!claimed) {
             sendError(response, request.getRequestURI(), HttpStatus.CONFLICT, "A request with the provided Idempotency-Key is currently being processed.");
             return;
         }
@@ -125,7 +136,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             } else {
                 byte[] requestBody = cachingRequest.getContentAsByteArray();
                 String requestHash = computeSha256(requestBody);
-                storage.put(storageKey, new IdempotencyRecord(status, contentType, responseBody, requestHash, false, now));
+                storage.save(storageKey, new IdempotencyRecord(status, contentType, responseBody, requestHash, false, now));
                 completed = true;
             }
 
@@ -185,12 +196,6 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         return key != null ? key.trim() : null;
     }
 
-    private void evictStaleEntries(long now) {
-        if (storage.size() > MAX_CACHE_SIZE) {
-            storage.entrySet().removeIf(entry -> now - entry.getValue().createdAt() > DEFAULT_TTL_MS);
-        }
-    }
-
     private void sendError(
             HttpServletResponse response,
             String uri,
@@ -215,19 +220,6 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         problem.put("timestamp", Instant.now().toString());
 
         response.getWriter().write(objectMapper.writeValueAsString(problem));
-    }
-
-    private record IdempotencyRecord(
-            int status,
-            String contentType,
-            byte[] body,
-            String requestHash,
-            boolean inProgress,
-            long createdAt
-    ) {
-        static IdempotencyRecord inProgress(long now) {
-            return new IdempotencyRecord(0, null, null, null, true, now);
-        }
     }
 
     private static class CachedResponseWrapper extends HttpServletResponseWrapper {
