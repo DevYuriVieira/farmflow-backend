@@ -41,4 +41,20 @@ public class PestScoutingRecord extends AuditableEntity {
 
     @Builder.Default
     private Instant detectedAt = Instant.now();
+
+    public com.farmflow.domain.vo.Coordinates getCoordinates() {
+        return (this.latitude != null && this.longitude != null)
+                ? com.farmflow.domain.vo.Coordinates.of(this.latitude, this.longitude)
+                : null;
+    }
+
+    public void setCoordinates(com.farmflow.domain.vo.Coordinates coordinates) {
+        if (coordinates != null) {
+            this.latitude = coordinates.latitude();
+            this.longitude = coordinates.longitude();
+        } else {
+            this.latitude = null;
+            this.longitude = null;
+        }
+    }
 }
