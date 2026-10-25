@@ -326,6 +326,51 @@ class ConsumerResilienceTest {
     }
 
     @Test
+    void shouldProcessCanonicalCloudEventPestMessage() {
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("evt-pest-ce-1");
+        String cePayload = "{"
+                + "\"id\":\"evt-pest-ce-1\","
+                + "\"source\":\"https://farmflow.com/scouting-service\","
+                + "\"type\":\"com.farmflow.pest.alert.raised.v1\","
+                + "\"specversion\":\"1.0\","
+                + "\"time\":\"2026-10-25T19:00:00Z\","
+                + "\"tenantId\":\"farm-ce-99\","
+                + "\"correlationId\":\"corr-ce-99\","
+                + "\"data\":{"
+                + "  \"scoutingId\":\"scout-ce-1\","
+                + "  \"farmId\":\"farm-ce-99\","
+                + "  \"plantationId\":\"plt-ce-5\","
+                + "  \"pestType\":\"Helicoverpa armigera\","
+                + "  \"severity\":\"CRITICAL\","
+                + "  \"recommendedAction\":\"Aplicação imediata\","
+                + "  \"observedAt\":\"2026-10-25T19:00:00Z\""
+                + "}"
+                + "}";
+        Message message = new Message(cePayload.getBytes(StandardCharsets.UTF_8), props);
+
+        doAnswer(invocation -> {
+            Runnable effect = invocation.getArgument(3);
+            effect.run();
+            return true;
+        }).when(deduplicationService).executeIfNew(
+                eq(PestScoutingConsumer.CONSUMER_NAME),
+                eq("evt-pest-ce-1"),
+                eq("PestDetected"),
+                any(Runnable.class)
+        );
+
+        pestConsumer.handlePestDetected(message);
+
+        ArgumentCaptor<FarmActivity> captor = ArgumentCaptor.forClass(FarmActivity.class);
+        verify(activityRepository, times(1)).save(captor.capture());
+        FarmActivity savedActivity = captor.getValue();
+        assertEquals("farm-ce-99", savedActivity.getFarmId());
+        assertEquals("plt-ce-5", savedActivity.getPlantationId());
+        assertEquals("Pest Alert Inspection: Helicoverpa armigera", savedActivity.getTitle());
+    }
+
+    @Test
     void shouldDiscardDuplicatePestMessageWithoutSideEffects() {
         MessageProperties props = new MessageProperties();
         props.setMessageId("pest-dup-123");
