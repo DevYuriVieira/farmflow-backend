@@ -173,4 +173,63 @@ class InventoryConcurrencyTest extends AbstractIntegrationTest {
         assertEquals(80.0, afterRejection.getQuantity());
         assertEquals(initialVersion, afterRejection.getVersion());
     }
+
+    @Test
+    void shouldDeductAtomicallyUnderHighConcurrencyWithoutOverdraw() throws Exception {
+        InventoryItem item = InventoryItem.builder()
+                .farmId("farm-test-atomic-conc")
+                .name("Fertilizante Foliar Concentrado")
+                .category(InventoryCategory.FERTILIZER)
+                .quantity(100.0)
+                .unit("L")
+                .minimumThreshold(10.0)
+                .build();
+        InventoryItem saved = inventoryRepository.saveAndFlush(item);
+        String itemId = saved.getId();
+        long initialVersion = saved.getVersion() != null ? saved.getVersion() : 0L;
+
+        int threadCount = 20;
+        double deductionPerThread = 10.0;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    Integer rowsUpdated = txTemplate.execute(status ->
+                            inventoryRepository.deductAtomically(itemId, deductionPerThread, java.time.Instant.now())
+                    );
+                    if (rowsUpdated != null && rowsUpdated == 1) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failureCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        boolean finished = doneLatch.await(15, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertTrue(finished, "All concurrent deduction workers should finish within timeout");
+        assertEquals(10, successCount.get(), "Exactly 10 workers should succeed (10 * 10 = 100 units)");
+        assertEquals(10, failureCount.get(), "Exactly 10 workers should fail due to insufficient inventory guard");
+
+        InventoryItem finalState = inventoryRepository.findById(itemId).orElseThrow();
+        assertEquals(0.0, finalState.getQuantity(), 0.001, "Final stock must be strictly depleted to 0.0 with zero overdraw");
+        assertEquals(initialVersion + 10, finalState.getVersion(), "Entity version must increment exactly 10 times");
+    }
 }
