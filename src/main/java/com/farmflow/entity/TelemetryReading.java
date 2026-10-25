@@ -38,4 +38,10 @@ public class TelemetryReading extends AuditableEntity {
     @Builder.Default
     @Column(name = "recorded_at")
     private Instant timestamp = Instant.now();
+
+    public com.farmflow.domain.vo.Quantity getReadingQuantity() {
+        return (this.value != null && this.unit != null)
+                ? com.farmflow.domain.vo.Quantity.of(this.value, this.unit)
+                : null;
+    }
 }

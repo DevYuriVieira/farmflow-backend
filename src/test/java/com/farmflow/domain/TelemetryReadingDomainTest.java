@@ -53,4 +53,18 @@ class TelemetryReadingDomainTest {
 
         assertTrue(reading.getValue() > 38.0);
     }
+
+    @Test
+    void shouldReturnTypedQuantityFromReading() {
+        TelemetryReading reading = TelemetryReading.builder()
+                .farmId("farm-001")
+                .type(TelemetryType.SOIL_MOISTURE)
+                .value(18.5)
+                .unit("%")
+                .build();
+
+        assertNotNull(reading.getReadingQuantity());
+        assertEquals(18.5, reading.getReadingQuantity().amount());
+        assertEquals("%", reading.getReadingQuantity().unit());
+    }
 }
