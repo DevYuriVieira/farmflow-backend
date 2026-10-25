@@ -159,4 +159,10 @@ public class InventoryItem extends AuditableEntity {
     public boolean isLowStock() {
         return this.minimumThreshold != null && this.quantity <= this.minimumThreshold;
     }
+
+    public com.farmflow.domain.vo.Quantity getStockQuantity() {
+        return (this.quantity != null && this.unit != null)
+                ? com.farmflow.domain.vo.Quantity.of(this.quantity, this.unit)
+                : null;
+    }
 }

@@ -329,4 +329,19 @@ class InventoryItemDomainTest {
 
         assertFalse(item.isLowStock());
     }
+
+    @Test
+    void shouldReturnTypedQuantityFromInventoryItem() {
+        InventoryItem item = InventoryItem.builder()
+                .farmId("farm-1")
+                .name("Semente de Soja")
+                .category(InventoryCategory.SEED)
+                .quantity(250.0)
+                .unit("kg")
+                .build();
+
+        assertNotNull(item.getStockQuantity());
+        assertEquals(250.0, item.getStockQuantity().amount());
+        assertEquals("kg", item.getStockQuantity().unit());
+    }
 }
