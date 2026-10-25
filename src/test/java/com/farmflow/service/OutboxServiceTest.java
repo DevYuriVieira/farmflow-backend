@@ -3,6 +3,9 @@ package com.farmflow.service;
 import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.config.W3CTraceContextUtils;
 import com.farmflow.entity.OutboxMessage;
+import com.farmflow.event.cloudevents.ActivityCompletedData;
+import com.farmflow.event.cloudevents.CloudEvent;
+import com.farmflow.event.cloudevents.InputUsedItem;
 import com.farmflow.repository.OutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -32,7 +35,7 @@ class OutboxServiceTest {
     @BeforeEach
     void setUp() {
         outboxRepository = mock(OutboxRepository.class);
-        objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper().findAndRegisterModules();
         outboxService = new OutboxService(outboxRepository, objectMapper);
         rabbitMqEventPublisher = mock(RabbitMqEventPublisher.class);
         farmFlowMetrics = mock(com.farmflow.config.FarmFlowMetrics.class);
@@ -196,6 +199,43 @@ class OutboxServiceTest {
         assertEquals("machinery.maintenance.hours", outboxService.resolveRoutingKey("MachineryOperatingHoursUpdated"));
         assertEquals("activity.completed", outboxService.resolveRoutingKey("ActivityCompleted"));
         assertEquals("activity.completed", outboxService.resolveRoutingKey("ActivityCompletedEvent"));
+        assertEquals("activity.completed", outboxService.resolveRoutingKey("com.farmflow.activity.completed.v1"));
+        assertEquals("pest.detected.warning", outboxService.resolveRoutingKey("com.farmflow.pest.alert.raised.v1"));
+        assertEquals("supply.input.reserved", outboxService.resolveRoutingKey("com.farmflow.supply.input.reserved.v1"));
+    }
+
+    @Test
+    void shouldRecordCloudEventWithCanonicalEnvelopeAndResolvedRoutingKey() {
+        ActivityCompletedData data = new ActivityCompletedData(
+                "act-101", "farm-mg", "plt-5", "HARVEST", "Colheita Soja",
+                Instant.now(), List.of(new InputUsedItem("seed-1", 100.0, "kg"))
+        );
+        CloudEvent<ActivityCompletedData> cloudEvent = CloudEvent.of(
+                "https://farmflow.com/activity-service",
+                "com.farmflow.activity.completed.v1",
+                "farm-mg",
+                "corr-custom-777",
+                data
+        );
+
+        when(outboxRepository.save(any(OutboxMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OutboxMessage recorded = outboxService.recordCloudEvent(cloudEvent);
+
+        assertNotNull(recorded);
+        assertEquals("com.farmflow.activity.completed.v1", recorded.getEventType());
+        assertEquals("activity.completed", recorded.getRoutingKey());
+        assertEquals("corr-custom-777", recorded.getCorrelationId());
+        assertTrue(W3CTraceContextUtils.isValidW3CTraceParent(recorded.getTraceParent()));
+        assertTrue(recorded.getPayload().contains("act-101"));
+        assertTrue(recorded.getPayload().contains("Colheita Soja"));
+        verify(outboxRepository, times(1)).save(any(OutboxMessage.class));
+    }
+
+    @Test
+    void shouldRejectNullCloudEventInRecordCloudEvent() {
+        assertThrows(IllegalArgumentException.class, () -> outboxService.recordCloudEvent(null));
+        assertThrows(IllegalArgumentException.class, () -> outboxService.recordCloudEvent("custom.key", null));
     }
 
     @Test
