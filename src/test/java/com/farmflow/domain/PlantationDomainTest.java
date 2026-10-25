@@ -223,4 +223,18 @@ class PlantationDomainTest {
         assertThrows(BusinessException.class, () -> plantation.transitionStatus(""));
         assertThrows(BusinessException.class, () -> plantation.transitionStatus((PlantationStatus) null));
     }
+
+    @Test
+    void shouldReturnTypedAreaFromPlantation() {
+        Plantation plantation = Plantation.builder()
+                .farmId("farm-001")
+                .name("Talhao Test")
+                .crop("SOYBEAN")
+                .areaHectares(100.0)
+                .build();
+
+        assertNotNull(plantation.getArea());
+        assertEquals(100.0, plantation.getArea().hectares());
+        assertEquals(1_000_000.0, plantation.getArea().toSquareMeters());
+    }
 }

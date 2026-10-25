@@ -165,4 +165,8 @@ public class Plantation extends AuditableEntity {
             this.notes = notes;
         }
     }
+
+    public com.farmflow.domain.vo.Area getArea() {
+        return this.areaHectares != null ? com.farmflow.domain.vo.Area.ofHectares(this.areaHectares) : null;
+    }
 }
