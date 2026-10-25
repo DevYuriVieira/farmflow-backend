@@ -368,4 +368,18 @@ class MachineryDomainTest {
                 machinery.scheduleNextMaintenance("2026/12/31")
         );
     }
+
+    @Test
+    void shouldReturnTypedMachineHoursFromMachinery() {
+        Machinery machinery = Machinery.builder()
+                .farmId("f1")
+                .name("Trator")
+                .model("M1")
+                .type("T1")
+                .operatingHours(350.5)
+                .build();
+
+        assertNotNull(machinery.getMachineHours());
+        assertEquals(350.5, machinery.getMachineHours().value());
+    }
 }

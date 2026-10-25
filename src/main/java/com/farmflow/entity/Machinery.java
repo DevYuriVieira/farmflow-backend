@@ -242,4 +242,8 @@ public class Machinery extends AuditableEntity {
         }
         this.status = MachineryStatus.OPERATIONAL;
     }
+
+    public com.farmflow.domain.vo.MachineHours getMachineHours() {
+        return com.farmflow.domain.vo.MachineHours.of(this.operatingHours != null ? this.operatingHours : 0.0);
+    }
 }
