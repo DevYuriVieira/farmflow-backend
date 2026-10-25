@@ -4,6 +4,7 @@ import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.config.W3CTraceContextUtils;
 import com.farmflow.entity.OutboxMessage;
 import com.farmflow.enums.OutboxStatus;
+import com.farmflow.event.cloudevents.CloudEvent;
 import com.farmflow.repository.OutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -29,23 +31,74 @@ public class OutboxService {
     private static final int LEASE_DURATION_SECONDS = 300;
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
 
-    private static final Map<String, String> ROUTING_KEY_CATALOG = Map.of(
-            "TelemetryAlert", "telemetry.alert.critical",
-            "TelemetryAlertEvent", "telemetry.alert.critical",
-            "PestDetected", "pest.detected.warning",
-            "PestDetectedEvent", "pest.detected.warning",
-            "MachineryMaintenanceScheduled", "machinery.maintenance.scheduled",
-            "MachineryMaintenanceScheduledEvent", "machinery.maintenance.scheduled",
-            "MachineryOperatingHoursUpdated", "machinery.maintenance.hours",
-            "MachineryOperatingHoursUpdatedEvent", "machinery.maintenance.hours",
-            "ActivityCompleted", "activity.completed",
-            "ActivityCompletedEvent", "activity.completed"
+    private static final Map<String, String> ROUTING_KEY_CATALOG = Map.ofEntries(
+            Map.entry("TelemetryAlert", "telemetry.alert.critical"),
+            Map.entry("TelemetryAlertEvent", "telemetry.alert.critical"),
+            Map.entry("PestDetected", "pest.detected.warning"),
+            Map.entry("PestDetectedEvent", "pest.detected.warning"),
+            Map.entry("MachineryMaintenanceScheduled", "machinery.maintenance.scheduled"),
+            Map.entry("MachineryMaintenanceScheduledEvent", "machinery.maintenance.scheduled"),
+            Map.entry("MachineryOperatingHoursUpdated", "machinery.maintenance.hours"),
+            Map.entry("MachineryOperatingHoursUpdatedEvent", "machinery.maintenance.hours"),
+            Map.entry("ActivityCompleted", "activity.completed"),
+            Map.entry("ActivityCompletedEvent", "activity.completed"),
+            Map.entry("com.farmflow.activity.completed.v1", "activity.completed"),
+            Map.entry("com.farmflow.pest.alert.raised.v1", "pest.detected.warning"),
+            Map.entry("com.farmflow.supply.input.reserved.v1", "supply.input.reserved")
     );
 
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    @Transactional(propagation = Propagation.MANDATORY)
+    public <T> OutboxMessage recordCloudEvent(CloudEvent<T> cloudEvent) {
+        if (cloudEvent == null) {
+            throw new IllegalArgumentException("cloudEvent must not be null");
+        }
+        String routingKey = resolveRoutingKey(cloudEvent.type());
+        return recordCloudEvent(routingKey, cloudEvent);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public <T> OutboxMessage recordCloudEvent(String routingKey, CloudEvent<T> cloudEvent) {
+        if (cloudEvent == null) {
+            throw new IllegalArgumentException("cloudEvent must not be null");
+        }
+        String payload;
+        try {
+            payload = objectMapper.writeValueAsString(cloudEvent);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to serialize CloudEvent to outbox JSON payload", e);
+        }
+
+        String correlationId = cloudEvent.correlationId();
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+            if (correlationId == null || correlationId.isBlank()) {
+                correlationId = UUID.randomUUID().toString();
+            }
+        }
+
+        String traceParent = MDC.get(CorrelationIdFilter.MDC_TRACEPARENT_KEY);
+        if (!W3CTraceContextUtils.isValidW3CTraceParent(traceParent)) {
+            traceParent = W3CTraceContextUtils.generateTraceParent(correlationId);
+        }
+
+        OutboxMessage message = OutboxMessage.builder()
+                .eventType(cloudEvent.type())
+                .routingKey(routingKey != null ? routingKey : resolveRoutingKey(cloudEvent.type()))
+                .payload(payload)
+                .correlationId(correlationId)
+                .traceParent(traceParent)
+                .occurredOn(cloudEvent.time() != null ? cloudEvent.time() : Instant.now())
+                .status(OutboxStatus.PENDING)
+                .attempts(0)
+                .build();
+
+        return outboxRepository.save(message);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public OutboxMessage recordEvent(String eventType, Object event) {
         String routingKey = resolveRoutingKey(eventType);
         return recordEvent(eventType, routingKey, event);
