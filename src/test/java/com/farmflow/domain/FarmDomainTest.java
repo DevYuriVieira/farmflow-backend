@@ -59,4 +59,17 @@ class FarmDomainTest {
         assertThrows(com.farmflow.exceptions.BusinessException.class, () ->
                 farm.updateDetails(null, null, -10.0, null, null, null, null));
     }
+
+    @Test
+    void shouldReturnTypedAreaFromTotalArea() {
+        Farm farm = Farm.builder()
+                .name("Fazenda Santa Tereza")
+                .location("Ribeirao Preto - SP")
+                .totalAreaHectares(1500.0)
+                .build();
+
+        assertNotNull(farm.getTotalArea());
+        assertEquals(1500.0, farm.getTotalArea().hectares());
+        assertEquals(15_000_000.0, farm.getTotalArea().toSquareMeters());
+    }
 }

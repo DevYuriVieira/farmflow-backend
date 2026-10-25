@@ -68,4 +68,8 @@ public class Farm extends AuditableEntity {
             this.status = status;
         }
     }
+
+    public com.farmflow.domain.vo.Area getTotalArea() {
+        return this.totalAreaHectares != null ? com.farmflow.domain.vo.Area.ofHectares(this.totalAreaHectares) : null;
+    }
 }
