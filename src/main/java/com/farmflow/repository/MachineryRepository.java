@@ -18,4 +18,17 @@ public interface MachineryRepository extends JpaRepository<Machinery, String> {
         }
         return findByFarmIdAndStatus(farmId, MachineryStatus.fromString(status));
     }
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("""
+        UPDATE Machinery m
+        SET m.operatingHours = :newHours, m.version = m.version + 1, m.updatedAt = :now
+        WHERE m.id = :id AND (m.operatingHours IS NULL OR m.operatingHours <= :newHours)
+        """)
+    int updateOperatingHoursMonotonically(
+            @org.springframework.data.repository.query.Param("id") String id,
+            @org.springframework.data.repository.query.Param("newHours") Double newHours,
+            @org.springframework.data.repository.query.Param("now") java.time.Instant now
+    );
 }
+
