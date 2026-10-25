@@ -1,21 +1,28 @@
 package com.farmflow.service;
 
-import com.farmflow.entity.FarmActivity;
+import com.farmflow.config.CorrelationIdFilter;
+import com.farmflow.config.FarmSecurityEvaluator;
 import com.farmflow.dto.ActivityDtos.*;
-import com.farmflow.repository.ActivityRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
 import com.farmflow.dto.PageResponse;
+import com.farmflow.entity.FarmActivity;
+import com.farmflow.event.ActivityCompletedEvent;
+import com.farmflow.event.cloudevents.ActivityCompletedData;
+import com.farmflow.event.cloudevents.CloudEvent;
+import com.farmflow.repository.ActivityRepository;
 import com.farmflow.specification.ActivitySpecification;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import com.farmflow.event.ActivityCompletedEvent;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -94,6 +101,7 @@ public class ActivityService {
         if (transitionedToCompleted) {
             ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
             outboxService.recordEvent("ActivityCompleted", event);
+            recordActivityCompletedCloudEvent(saved);
             eventPublisher.publishEvent(event);
         }
         return saved;
@@ -112,9 +120,43 @@ public class ActivityService {
         if (transitionedToCompleted) {
             ActivityCompletedEvent event = new ActivityCompletedEvent(saved);
             outboxService.recordEvent("ActivityCompleted", event);
+            recordActivityCompletedCloudEvent(saved);
             eventPublisher.publishEvent(event);
         }
         return saved;
+    }
+
+    private void recordActivityCompletedCloudEvent(FarmActivity activity) {
+        Instant completedInstant;
+        try {
+            completedInstant = activity.getCompletedAt() != null
+                    ? Instant.parse(activity.getCompletedAt())
+                    : Instant.now();
+        } catch (Exception e) {
+            completedInstant = Instant.now();
+        }
+
+        ActivityCompletedData data = new ActivityCompletedData(
+                activity.getId() != null ? activity.getId() : UUID.randomUUID().toString(),
+                activity.getFarmId(),
+                activity.getPlantationId(),
+                activity.getType(),
+                activity.getTitle(),
+                completedInstant,
+                List.of()
+        );
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        CloudEvent<ActivityCompletedData> cloudEvent = CloudEvent.of(
+                "https://farmflow.com/activity-service",
+                "com.farmflow.activity.completed.v1",
+                activity.getFarmId(),
+                correlationId,
+                data
+        );
+        outboxService.recordCloudEvent(cloudEvent);
     }
 
     public PageResponse<FarmActivity> getActivitiesPaged(String farmId, String plantationId, String type, Boolean completed, Pageable pageable) {
