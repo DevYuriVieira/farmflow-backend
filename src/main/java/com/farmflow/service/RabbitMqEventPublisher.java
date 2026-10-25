@@ -65,9 +65,9 @@ public class RabbitMqEventPublisher {
         }
         try {
             CorrelationData.Confirm confirm = correlationData.getFuture().get(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (confirm != null && !confirm.isAck()) {
+            if (confirm != null && !confirm.ack()) {
                 throw new AmqpException("Broker rejected message publication (NACK) for messageId=" + messageId
-                        + ", reason=" + confirm.getReason());
+                        + ", reason=" + confirm.reason());
             }
             org.springframework.amqp.core.ReturnedMessage returned = correlationData.getReturned();
             if (returned != null) {
