@@ -93,7 +93,9 @@ public class PestScoutingConsumer {
     private void applyBusinessEffect(String payload, String messageId) {
         try {
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode recordNode = root.has("record") ? root.get("record") : root;
+            JsonNode recordNode = root.has("record")
+                    ? root.get("record")
+                    : (root.has("data") ? root.get("data") : root);
 
             String farmId = recordNode.hasNonNull("farmId") ? recordNode.get("farmId").asText() :
                     (root.hasNonNull("tenantId") ? root.get("tenantId").asText() : null);
@@ -107,7 +109,9 @@ public class PestScoutingConsumer {
                     : (recordNode.hasNonNull("field") ? recordNode.get("field").asText() : "field-default");
             String pestName = recordNode.hasNonNull("pestName")
                     ? recordNode.get("pestName").asText()
-                    : (recordNode.hasNonNull("pest") ? recordNode.get("pest").asText() : "Pest Alert");
+                    : (recordNode.hasNonNull("pestType")
+                    ? recordNode.get("pestType").asText()
+                    : (recordNode.hasNonNull("pest") ? recordNode.get("pest").asText() : "Pest Alert"));
 
             FarmActivity activity = FarmActivity.builder()
                     .farmId(farmId)
