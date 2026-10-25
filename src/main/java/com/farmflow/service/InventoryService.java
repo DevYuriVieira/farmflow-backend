@@ -1,16 +1,23 @@
 package com.farmflow.service;
 
+import com.farmflow.config.CorrelationIdFilter;
+import com.farmflow.config.FarmSecurityEvaluator;
 import com.farmflow.dto.InventoryDtos.*;
 import com.farmflow.entity.InventoryItem;
 import com.farmflow.enums.InventoryCategory;
+import com.farmflow.event.cloudevents.CloudEvent;
+import com.farmflow.event.cloudevents.InputReservedData;
 import com.farmflow.exceptions.BusinessException;
 import com.farmflow.exceptions.ResourceNotFoundException;
 import com.farmflow.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -18,7 +25,8 @@ import java.util.List;
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
-    private final com.farmflow.config.FarmSecurityEvaluator farmSecurity;
+    private final FarmSecurityEvaluator farmSecurity;
+    private final OutboxService outboxService;
 
     public List<InventoryItem> getAllItems() {
         if (farmSecurity.isAdmin()) {
@@ -102,6 +110,57 @@ public class InventoryService {
         }
         getItemById(id);
         inventoryRepository.replenishAtomically(id, amount, java.time.Instant.now());
+        return inventoryRepository.findById(id).orElseThrow();
+    }
+
+    @Transactional
+    public InventoryItem reserveStock(String id, String farmId, String activityId, Double amount) {
+        if (amount == null || amount <= 0.0) {
+            throw new BusinessException("Reservation amount must be positive.");
+        }
+        if (farmId == null || farmId.isBlank()) {
+            throw new BusinessException("Farm ID cannot be blank.");
+        }
+        if (activityId == null || activityId.isBlank()) {
+            throw new BusinessException("Activity ID cannot be blank.");
+        }
+
+        farmSecurity.validateTenantAccess(farmId);
+        InventoryItem item = getItemById(id);
+        if (!farmId.equals(item.getFarmId())) {
+            throw new BusinessException("Item does not belong to specified farm.");
+        }
+
+        int updated = inventoryRepository.deductAtomically(id, amount, Instant.now());
+        if (updated == 0) {
+            throw new BusinessException("Insufficient inventory to reserve " + amount + " units.");
+        }
+
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
+        InputReservedData data = new InputReservedData(
+                UUID.randomUUID().toString(),
+                farmId,
+                activityId,
+                id,
+                amount,
+                item.getUnit(),
+                Instant.now()
+        );
+
+        CloudEvent<InputReservedData> cloudEvent = CloudEvent.of(
+                "https://farmflow.com/supply-service",
+                "com.farmflow.supply.input.reserved.v1",
+                farmId,
+                correlationId,
+                data
+        );
+
+        outboxService.recordCloudEvent(cloudEvent);
+
         return inventoryRepository.findById(id).orElseThrow();
     }
 
