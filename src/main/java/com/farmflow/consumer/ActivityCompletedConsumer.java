@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
+import com.farmflow.event.cloudevents.CloudEvent;
+import com.farmflow.event.cloudevents.InputReservationFailedData;
 import com.farmflow.repository.InventoryRepository;
 import com.farmflow.service.MessageDeduplicationService;
+import com.farmflow.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -30,6 +34,7 @@ public class ActivityCompletedConsumer {
     private final ObjectMapper objectMapper;
     private final FarmFlowMetrics farmFlowMetrics;
     private final AmqpRetryRouter retryRouter;
+    private final OutboxService outboxService;
 
     @RabbitListener(queues = RabbitMqTopologyConfig.ACTIVITY_COMPLETED_QUEUE)
     public void handleActivityCompleted(Message message) {
@@ -119,6 +124,7 @@ public class ActivityCompletedConsumer {
                         int updated = inventoryRepository.deductAtomically(itemId, quantity, Instant.now());
                         if (updated == 0) {
                             log.warn("Deduction skipped or insufficient inventory for itemId={} in activityId={}", itemId, activityId);
+                            emitInputReservationFailed(farmId, activityId, itemId, quantity, "INSUFFICIENT_STOCK");
                         }
                     }
                 }
@@ -128,5 +134,31 @@ public class ActivityCompletedConsumer {
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply activity completed business effect for message " + messageId, e);
         }
+    }
+
+    private void emitInputReservationFailed(String farmId, String activityId, String itemId, double quantity, String reason) {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
+        InputReservationFailedData data = new InputReservationFailedData(
+                UUID.randomUUID().toString(),
+                farmId,
+                activityId,
+                itemId,
+                quantity,
+                reason,
+                Instant.now()
+        );
+
+        CloudEvent<InputReservationFailedData> cloudEvent = CloudEvent.of(
+                "https://farmflow.com/supply-service",
+                "com.farmflow.supply.input.reservation.failed.v1",
+                farmId,
+                correlationId,
+                data
+        );
+        outboxService.recordCloudEvent(cloudEvent);
     }
 }
