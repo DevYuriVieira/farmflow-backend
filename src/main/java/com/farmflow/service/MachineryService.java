@@ -170,11 +170,70 @@ public class MachineryService {
         for (Object event : events) {
             if (event instanceof MachineryMaintenanceScheduledEvent maintenanceEvent) {
                 outboxService.recordEvent("MachineryMaintenanceScheduled", maintenanceEvent);
+                recordMaintenanceCloudEvent(maintenanceEvent);
                 eventPublisher.publishEvent(maintenanceEvent);
             } else if (event instanceof MachineryOperatingHoursUpdatedEvent hoursEvent) {
                 outboxService.recordEvent("MachineryOperatingHoursUpdated", hoursEvent);
+                recordHoursUpdatedCloudEvent(hoursEvent);
                 eventPublisher.publishEvent(hoursEvent);
             }
         }
+    }
+
+    private void recordMaintenanceCloudEvent(MachineryMaintenanceScheduledEvent event) {
+        Machinery machinery = event.machinery();
+        String correlationId = org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = java.util.UUID.randomUUID().toString();
+        }
+
+        com.farmflow.event.cloudevents.MachineryMaintenanceScheduledData data =
+                new com.farmflow.event.cloudevents.MachineryMaintenanceScheduledData(
+                        machinery.getId() != null ? machinery.getId() : java.util.UUID.randomUUID().toString(),
+                        machinery.getFarmId(),
+                        machinery.getName() != null ? machinery.getName() : "Machinery",
+                        machinery.getModel(),
+                        event.reason() != null && !event.reason().isBlank() ? event.reason() : "Scheduled Maintenance",
+                        event.expectedDate(),
+                        machinery.getOperatingHours() != null ? machinery.getOperatingHours() : 0.0,
+                        event.occurredOn() != null ? event.occurredOn() : java.time.Instant.now()
+                );
+
+        com.farmflow.event.cloudevents.CloudEvent<com.farmflow.event.cloudevents.MachineryMaintenanceScheduledData> cloudEvent =
+                com.farmflow.event.cloudevents.CloudEvent.of(
+                        "https://farmflow.com/machinery-service",
+                        "com.farmflow.machinery.maintenance.scheduled.v1",
+                        machinery.getFarmId(),
+                        correlationId,
+                        data
+                );
+        outboxService.recordCloudEvent(cloudEvent);
+    }
+
+    private void recordHoursUpdatedCloudEvent(MachineryOperatingHoursUpdatedEvent event) {
+        Machinery machinery = event.machinery();
+        String correlationId = org.slf4j.MDC.get(com.farmflow.config.CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = java.util.UUID.randomUUID().toString();
+        }
+
+        com.farmflow.event.cloudevents.MachineryHoursUpdatedData data =
+                new com.farmflow.event.cloudevents.MachineryHoursUpdatedData(
+                        machinery.getId() != null ? machinery.getId() : java.util.UUID.randomUUID().toString(),
+                        machinery.getFarmId(),
+                        event.previousHours() != null ? event.previousHours() : 0.0,
+                        event.newHours() != null ? event.newHours() : 0.0,
+                        event.occurredOn() != null ? event.occurredOn() : java.time.Instant.now()
+                );
+
+        com.farmflow.event.cloudevents.CloudEvent<com.farmflow.event.cloudevents.MachineryHoursUpdatedData> cloudEvent =
+                com.farmflow.event.cloudevents.CloudEvent.of(
+                        "https://farmflow.com/machinery-service",
+                        "com.farmflow.machinery.hours.updated.v1",
+                        machinery.getFarmId(),
+                        correlationId,
+                        data
+                );
+        outboxService.recordCloudEvent(cloudEvent);
     }
 }
