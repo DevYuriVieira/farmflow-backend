@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://farmflow.com/contracts/events/machinery-maintenance-scheduled-v1.json",
+  "title": "MachineryMaintenanceScheduledEvent",
+  "description": "CloudEvents schema for machinery scheduled maintenance events in FarmFlow Fleet",
+  "type": "object",
+  "required": ["id", "source", "type", "specversion", "time", "tenantId", "correlationId", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.farmflow.machinery.maintenance.scheduled.v1"
+    },
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": ["machineryId", "farmId", "name", "reason", "currentHours", "scheduledAt"],
+      "properties": {
+        "machineryId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "farmId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedDate": {
+          "type": ["string", "null"]
+        },
+        "currentHours": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "scheduledAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

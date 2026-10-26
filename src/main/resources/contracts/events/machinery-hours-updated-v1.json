@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://farmflow.com/contracts/events/machinery-hours-updated-v1.json",
+  "title": "MachineryHoursUpdatedEvent",
+  "description": "CloudEvents schema for monotonic machinery operating hours updates in FarmFlow Fleet",
+  "type": "object",
+  "required": ["id", "source", "type", "specversion", "time", "tenantId", "correlationId", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.farmflow.machinery.hours.updated.v1"
+    },
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": ["machineryId", "farmId", "previousHours", "newHours", "updatedAt"],
+      "properties": {
+        "machineryId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "farmId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previousHours": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "newHours": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
