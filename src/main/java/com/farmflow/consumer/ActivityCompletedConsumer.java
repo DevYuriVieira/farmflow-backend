@@ -7,6 +7,7 @@ import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
 import com.farmflow.event.cloudevents.CloudEvent;
 import com.farmflow.event.cloudevents.InputReservationFailedData;
+import com.farmflow.event.cloudevents.InputReservedData;
 import com.farmflow.repository.InventoryRepository;
 import com.farmflow.service.MessageDeduplicationService;
 import com.farmflow.service.OutboxService;
@@ -125,6 +126,9 @@ public class ActivityCompletedConsumer {
                         if (updated == 0) {
                             log.warn("Deduction skipped or insufficient inventory for itemId={} in activityId={}", itemId, activityId);
                             emitInputReservationFailed(farmId, activityId, itemId, quantity, "INSUFFICIENT_STOCK");
+                        } else {
+                            String unit = itemNode.hasNonNull("unit") ? itemNode.get("unit").asText() : "UN";
+                            emitInputReserved(farmId, activityId, itemId, quantity, unit);
                         }
                     }
                 }
@@ -155,6 +159,32 @@ public class ActivityCompletedConsumer {
         CloudEvent<InputReservationFailedData> cloudEvent = CloudEvent.of(
                 "https://farmflow.com/supply-service",
                 "com.farmflow.supply.input.reservation.failed.v1",
+                farmId,
+                correlationId,
+                data
+        );
+        outboxService.recordCloudEvent(cloudEvent);
+    }
+
+    private void emitInputReserved(String farmId, String activityId, String itemId, double quantity, String unit) {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_CORRELATION_ID_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
+        InputReservedData data = new InputReservedData(
+                UUID.randomUUID().toString(),
+                farmId,
+                activityId,
+                itemId,
+                quantity,
+                unit != null && !unit.isBlank() ? unit : "UN",
+                Instant.now()
+        );
+
+        CloudEvent<InputReservedData> cloudEvent = CloudEvent.of(
+                "https://farmflow.com/supply-service",
+                "com.farmflow.supply.input.reserved.v1",
                 farmId,
                 correlationId,
                 data

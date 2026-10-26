@@ -5,6 +5,7 @@ import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
 import com.farmflow.event.cloudevents.CloudEvent;
 import com.farmflow.event.cloudevents.InputReservationFailedData;
+import com.farmflow.event.cloudevents.InputReservedData;
 import com.farmflow.repository.InventoryRepository;
 import com.farmflow.service.MessageDeduplicationService;
 import com.farmflow.service.OutboxService;
@@ -103,6 +104,16 @@ class ActivityCompletedConsumerTest {
         );
         verify(inventoryRepository).deductAtomically(eq("item-npk"), eq(150.0), any(Instant.class));
         verify(farmFlowMetrics).incrementConsumerProcessed("ActivityCompleted");
+        ArgumentCaptor<CloudEvent<InputReservedData>> cloudEventCaptor = ArgumentCaptor.forClass(CloudEvent.class);
+        verify(outboxService).recordCloudEvent(cloudEventCaptor.capture());
+        CloudEvent<InputReservedData> capturedEvent = cloudEventCaptor.getValue();
+        assertEquals("com.farmflow.supply.input.reserved.v1", capturedEvent.type());
+        assertEquals("farm-uberaba", capturedEvent.tenantId());
+        assertEquals("corr-100", capturedEvent.correlationId());
+        assertEquals("act-100", capturedEvent.data().activityId());
+        assertEquals("item-npk", capturedEvent.data().itemId());
+        assertEquals(150.0, capturedEvent.data().quantity());
+        assertEquals("kg", capturedEvent.data().unit());
         verifyNoInteractions(retryRouter);
     }
 
