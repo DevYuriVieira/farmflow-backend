@@ -82,6 +82,13 @@
             },
             "additionalProperties": false
           }
+        },
+        "machineryId": {
+          "type": ["string", "null"]
+        },
+        "hoursUsed": {
+          "type": ["number", "null"],
+          "minimum": 0
         }
       },
       "additionalProperties": false

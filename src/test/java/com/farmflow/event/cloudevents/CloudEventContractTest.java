@@ -91,6 +91,32 @@ class CloudEventContractTest {
     }
 
     @Test
+    @DisplayName("ActivityCompleted: serialização com maquinário e validação contra schema v1")
+    void shouldSerializeAndValidateActivityCompletedEventWithMachinery() throws Exception {
+        ActivityCompletedData data = new ActivityCompletedData(
+                "act-100", "farm-uberaba", "plt-12", "HARVESTING", "Colheita de Milho",
+                Instant.parse("2026-10-26T15:30:00Z"),
+                List.of(new InputUsedItem("inv-100", 10.0, "litros")),
+                "mach-tractor-01",
+                4.5
+        );
+
+        CloudEvent<ActivityCompletedData> event = new CloudEvent<>(
+                "evt-act-100", "https://farmflow.com/core-service",
+                "com.farmflow.activity.completed.v1", "1.0",
+                Instant.parse("2026-10-26T15:30:05Z"),
+                "farm-uberaba", "corr-act-100", data
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertSchemaConformance("/contracts/events/activity-completed-v1.json", node);
+        assertEquals("mach-tractor-01", node.path("data").path("machineryId").asText());
+        assertEquals(4.5, node.path("data").path("hoursUsed").asDouble());
+    }
+
+    @Test
     @DisplayName("PestAlertRaised: serialização e validação contra schema v1")
     void shouldSerializeAndValidatePestAlertRaisedEvent() throws Exception {
         PestAlertRaisedData data = new PestAlertRaisedData(
