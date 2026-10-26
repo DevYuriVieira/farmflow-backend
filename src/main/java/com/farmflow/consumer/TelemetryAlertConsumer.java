@@ -93,10 +93,16 @@ public class TelemetryAlertConsumer {
     private void applyBusinessEffect(String payload, String messageId) {
         try {
             JsonNode root = objectMapper.readTree(payload);
-            JsonNode readingNode = root.has("reading") ? root.get("reading") : root;
+            JsonNode readingNode = root.has("reading")
+                    ? root.get("reading")
+                    : (root.has("data") ? root.get("data") : root);
 
             String sensorId = readingNode.hasNonNull("sensorId") ? readingNode.get("sensorId").asText() : "unknown-sensor";
-            String farmId = readingNode.hasNonNull("farmId") ? readingNode.get("farmId").asText() : null;
+            String farmId = readingNode.hasNonNull("farmId")
+                    ? readingNode.get("farmId").asText()
+                    : (root.hasNonNull("tenantId")
+                    ? root.get("tenantId").asText()
+                    : (root.hasNonNull("tenantid") ? root.get("tenantid").asText() : null));
             String plantationId = readingNode.hasNonNull("plantationId") ? readingNode.get("plantationId").asText() : "unassigned";
 
             if (farmId == null || farmId.isBlank()) {
