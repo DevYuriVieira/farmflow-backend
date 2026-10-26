@@ -77,6 +77,12 @@ class MachineryServiceTest {
         assertEquals("MAINTENANCE", created.getStatus());
         verify(outboxService, times(1)).recordEvent(eq("MachineryMaintenanceScheduled"), any(MachineryMaintenanceScheduledEvent.class));
         verify(eventPublisher, times(1)).publishEvent(any(MachineryMaintenanceScheduledEvent.class));
+
+        org.mockito.ArgumentCaptor<com.farmflow.event.cloudevents.CloudEvent> ceCaptor =
+                org.mockito.ArgumentCaptor.forClass(com.farmflow.event.cloudevents.CloudEvent.class);
+        verify(outboxService, times(1)).recordCloudEvent(ceCaptor.capture());
+        assertEquals("com.farmflow.machinery.maintenance.scheduled.v1", ceCaptor.getValue().type());
+        assertEquals("farm-123", ceCaptor.getValue().tenantId());
     }
 
     @Test
@@ -99,6 +105,12 @@ class MachineryServiceTest {
         assertEquals(450.0, updated.getOperatingHours());
         verify(outboxService, times(1)).recordEvent(eq("MachineryOperatingHoursUpdated"), any(MachineryOperatingHoursUpdatedEvent.class));
         verify(eventPublisher, times(1)).publishEvent(any(MachineryOperatingHoursUpdatedEvent.class));
+
+        org.mockito.ArgumentCaptor<com.farmflow.event.cloudevents.CloudEvent> ceCaptor =
+                org.mockito.ArgumentCaptor.forClass(com.farmflow.event.cloudevents.CloudEvent.class);
+        verify(outboxService, times(1)).recordCloudEvent(ceCaptor.capture());
+        assertEquals("com.farmflow.machinery.hours.updated.v1", ceCaptor.getValue().type());
+        assertEquals("farm-123", ceCaptor.getValue().tenantId());
     }
 
     @Test
@@ -122,6 +134,7 @@ class MachineryServiceTest {
         assertEquals("2026-12-10", updated.getNextMaintenanceDate());
         verify(outboxService, times(1)).recordEvent(eq("MachineryMaintenanceScheduled"), any(MachineryMaintenanceScheduledEvent.class));
         verify(eventPublisher, times(1)).publishEvent(any(MachineryMaintenanceScheduledEvent.class));
+        verify(outboxService, times(1)).recordCloudEvent(any());
     }
 
     @Test
