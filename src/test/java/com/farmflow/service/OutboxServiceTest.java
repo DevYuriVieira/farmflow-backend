@@ -202,6 +202,9 @@ class OutboxServiceTest {
         assertEquals("activity.completed", outboxService.resolveRoutingKey("com.farmflow.activity.completed.v1"));
         assertEquals("pest.detected.warning", outboxService.resolveRoutingKey("com.farmflow.pest.alert.raised.v1"));
         assertEquals("supply.input.reserved", outboxService.resolveRoutingKey("com.farmflow.supply.input.reserved.v1"));
+        assertEquals("telemetry.alert.critical", outboxService.resolveRoutingKey("com.farmflow.telemetry.alert.raised.v1"));
+        assertEquals("machinery.maintenance.scheduled", outboxService.resolveRoutingKey("com.farmflow.machinery.maintenance.scheduled.v1"));
+        assertEquals("machinery.maintenance.hours", outboxService.resolveRoutingKey("com.farmflow.machinery.hours.updated.v1"));
     }
 
     @Test
