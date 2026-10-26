@@ -157,6 +157,114 @@ class CloudEventContractTest {
         );
     }
 
+    @Test
+    @DisplayName("TelemetryAlertRaised: serialização e validação contra schema v1")
+    void shouldSerializeAndValidateTelemetryAlertRaisedEvent() throws Exception {
+        TelemetryAlertRaisedData data = new TelemetryAlertRaisedData(
+                "tel-1", "farm-1", "plt-1", "sensor-soil-01", "SOIL_MOISTURE",
+                14.5, "%", "CRITICAL", "Umidade abaixo do ponto de murcha",
+                Instant.parse("2026-10-26T10:00:00Z")
+        );
+
+        CloudEvent<TelemetryAlertRaisedData> event = new CloudEvent<>(
+                "evt-tel-1", "https://farmflow.com/iot-service",
+                "com.farmflow.telemetry.alert.raised.v1", "1.0",
+                Instant.parse("2026-10-26T10:00:01Z"),
+                "farm-1", "corr-tel-1", data
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertSchemaConformance("/contracts/events/telemetry-alert-raised-v1.json", node);
+        assertEquals("sensor-soil-01", node.path("data").path("sensorId").asText());
+        assertEquals("CRITICAL", node.path("data").path("severity").asText());
+        assertEquals(14.5, node.path("data").path("value").asDouble());
+    }
+
+    @Test
+    @DisplayName("TelemetryAlertRaised: deve rejeitar severity inválida ou campos em branco")
+    void shouldRejectInvalidTelemetryData() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new TelemetryAlertRaisedData("t-1", "f-1", "p-1", "s-1", "TEMP", 40.0, "C", "INVALID_SEV", "Motivo", Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new TelemetryAlertRaisedData("", "f-1", "p-1", "s-1", "TEMP", 40.0, "C", "HIGH", "Motivo", Instant.now())
+        );
+    }
+
+    @Test
+    @DisplayName("MachineryMaintenanceScheduled: serialização e validação contra schema v1")
+    void shouldSerializeAndValidateMachineryMaintenanceScheduledEvent() throws Exception {
+        MachineryMaintenanceScheduledData data = new MachineryMaintenanceScheduledData(
+                "mach-1", "farm-1", "Trator John Deere 8R", "8R 370",
+                "Revisão preventiva 500h", "2026-11-01", 498.5,
+                Instant.parse("2026-10-26T11:00:00Z")
+        );
+
+        CloudEvent<MachineryMaintenanceScheduledData> event = new CloudEvent<>(
+                "evt-mach-maint-1", "https://farmflow.com/fleet-service",
+                "com.farmflow.machinery.maintenance.scheduled.v1", "1.0",
+                Instant.parse("2026-10-26T11:00:02Z"),
+                "farm-1", "corr-maint-1", data
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertSchemaConformance("/contracts/events/machinery-maintenance-scheduled-v1.json", node);
+        assertEquals("mach-1", node.path("data").path("machineryId").asText());
+        assertEquals(498.5, node.path("data").path("currentHours").asDouble());
+    }
+
+    @Test
+    @DisplayName("MachineryMaintenanceScheduled: deve rejeitar horas negativas ou campos em branco")
+    void shouldRejectInvalidMachineryMaintenanceData() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new MachineryMaintenanceScheduledData("m-1", "f-1", "Trator", "8R", "Revisao", "2026-11-01", -5.0, Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new MachineryMaintenanceScheduledData("  ", "f-1", "Trator", "8R", "Revisao", "2026-11-01", 100.0, Instant.now())
+        );
+    }
+
+    @Test
+    @DisplayName("MachineryHoursUpdated: serialização e validação contra schema v1")
+    void shouldSerializeAndValidateMachineryHoursUpdatedEvent() throws Exception {
+        MachineryHoursUpdatedData data = new MachineryHoursUpdatedData(
+                "mach-2", "farm-1", 350.0, 362.5,
+                Instant.parse("2026-10-26T12:00:00Z")
+        );
+
+        CloudEvent<MachineryHoursUpdatedData> event = new CloudEvent<>(
+                "evt-mach-hrs-1", "https://farmflow.com/fleet-service",
+                "com.farmflow.machinery.hours.updated.v1", "1.0",
+                Instant.parse("2026-10-26T12:00:01Z"),
+                "farm-1", "corr-hrs-1", data
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertSchemaConformance("/contracts/events/machinery-hours-updated-v1.json", node);
+        assertEquals(350.0, node.path("data").path("previousHours").asDouble());
+        assertEquals(362.5, node.path("data").path("newHours").asDouble());
+    }
+
+    @Test
+    @DisplayName("MachineryHoursUpdated: deve rejeitar horas negativas ou campos em branco")
+    void shouldRejectInvalidMachineryHoursData() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new MachineryHoursUpdatedData("m-1", "f-1", -1.0, 10.0, Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new MachineryHoursUpdatedData("m-1", "f-1", 10.0, -5.0, Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new MachineryHoursUpdatedData("", "f-1", 10.0, 20.0, Instant.now())
+        );
+    }
+
     private void assertSchemaConformance(String schemaResourcePath, JsonNode payloadNode) throws Exception {
         try (InputStream is = getClass().getResourceAsStream(schemaResourcePath)) {
             assertNotNull(is, "Schema resource must exist: " + schemaResourcePath);
