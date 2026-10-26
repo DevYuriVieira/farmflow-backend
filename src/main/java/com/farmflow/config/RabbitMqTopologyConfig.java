@@ -24,6 +24,7 @@ public class RabbitMqTopologyConfig {
     public static final String PEST_DETECTED_QUEUE = "farmflow.pest.detected";
     public static final String MACHINERY_MAINTENANCE_QUEUE = "farmflow.machinery.maintenance";
     public static final String ACTIVITY_COMPLETED_QUEUE = "farmflow.activity.completed";
+    public static final String INPUT_RESERVATION_FAILED_QUEUE = "farmflow.supply.input.reservation.failed";
 
     public static final String RETRY_10S_QUEUE = "farmflow.events.retry.10s";
     public static final String RETRY_30S_QUEUE = "farmflow.events.retry.30s";
@@ -35,6 +36,8 @@ public class RabbitMqTopologyConfig {
     public static final String ROUTING_PEST = "pest.detected.#";
     public static final String ROUTING_MACHINERY = "machinery.maintenance.#";
     public static final String ROUTING_ACTIVITY = "activity.#";
+    public static final String ROUTING_INPUT_RESERVATION_FAILED = "supply.input.reservation.failed.#";
+    public static final String ROUTING_INPUT_RESERVATION_FAILED_RETRY_RETURN = "supply.input.reservation.failed.retry.#";
 
     @Bean
     public FanoutExchange unroutableExchange() {
@@ -96,6 +99,14 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Queue inputReservationFailedQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "supply.input.reservation.failed.retry.10s");
+        return new Queue(INPUT_RESERVATION_FAILED_QUEUE, true, false, false, args);
+    }
+
+    @Bean
     public Queue retry10sQueue() {
         Map<String, Object> args = new HashMap<>();
         args.put("x-message-ttl", 10000);
@@ -150,6 +161,16 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding inputReservationFailedBinding(Queue inputReservationFailedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(inputReservationFailedQueue).to(mainExchange).with(ROUTING_INPUT_RESERVATION_FAILED);
+    }
+
+    @Bean
+    public Binding inputReservationFailedRetryReturnBinding(Queue inputReservationFailedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(inputReservationFailedQueue).to(mainExchange).with(ROUTING_INPUT_RESERVATION_FAILED_RETRY_RETURN);
+    }
+
+    @Bean
     public Binding retry10sBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("telemetry.alerts.retry.10s");
     }
@@ -167,6 +188,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry10sActivityBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("activity.completed.retry.10s");
+    }
+
+    @Bean
+    public Binding retry10sInputReservationFailedBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("supply.input.reservation.failed.retry.10s");
     }
 
     @Bean
@@ -190,6 +216,11 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding retry30sInputReservationFailedBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("supply.input.reservation.failed.retry.30s");
+    }
+
+    @Bean
     public Binding retry90sBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("telemetry.alerts.retry.90s");
     }
@@ -207,6 +238,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry90sActivityBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("activity.completed.retry.90s");
+    }
+
+    @Bean
+    public Binding retry90sInputReservationFailedBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("supply.input.reservation.failed.retry.90s");
     }
 
     @Bean
