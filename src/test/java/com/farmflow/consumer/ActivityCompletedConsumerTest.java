@@ -3,13 +3,17 @@ package com.farmflow.consumer;
 import com.farmflow.config.CorrelationIdFilter;
 import com.farmflow.config.FarmFlowMetrics;
 import com.farmflow.config.RabbitMqTopologyConfig;
+import com.farmflow.event.cloudevents.CloudEvent;
+import com.farmflow.event.cloudevents.InputReservationFailedData;
 import com.farmflow.repository.InventoryRepository;
 import com.farmflow.service.MessageDeduplicationService;
+import com.farmflow.service.OutboxService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -40,6 +44,9 @@ class ActivityCompletedConsumerTest {
     @Mock
     private AmqpRetryRouter retryRouter;
 
+    @Mock
+    private OutboxService outboxService;
+
     private ActivityCompletedConsumer sut;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -50,7 +57,8 @@ class ActivityCompletedConsumerTest {
                 inventoryRepository,
                 objectMapper,
                 farmFlowMetrics,
-                retryRouter
+                retryRouter,
+                outboxService
         );
     }
 
@@ -96,6 +104,52 @@ class ActivityCompletedConsumerTest {
         verify(inventoryRepository).deductAtomically(eq("item-npk"), eq(150.0), any(Instant.class));
         verify(farmFlowMetrics).incrementConsumerProcessed("ActivityCompleted");
         verifyNoInteractions(retryRouter);
+    }
+
+    @Test
+    @DisplayName("deve emitir evento de falha de reserva de insumo quando o saldo de estoque for insuficiente")
+    @SuppressWarnings("unchecked")
+    void shouldEmitInputReservationFailedCloudEventWhenStockDeductionFails() {
+        String payload = """
+            {
+                "activityId": "act-200",
+                "farmId": "farm-uberaba",
+                "inputsUsed": [
+                    { "itemId": "item-calcario", "quantity": 500.0, "unit": "kg" }
+                ]
+            }
+            """;
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("msg-act-200");
+        props.setCorrelationId("corr-200");
+        Message message = new Message(payload.getBytes(StandardCharsets.UTF_8), props);
+
+        doAnswer(inv -> {
+            Runnable r = inv.getArgument(3);
+            r.run();
+            return true;
+        }).when(deduplicationService).executeIfNew(
+                eq(ActivityCompletedConsumer.CONSUMER_NAME),
+                eq("msg-act-200"),
+                eq("ActivityCompleted"),
+                any(Runnable.class)
+        );
+
+        when(inventoryRepository.deductAtomically(eq("item-calcario"), eq(500.0), any(Instant.class))).thenReturn(0);
+
+        sut.handleActivityCompleted(message);
+
+        ArgumentCaptor<CloudEvent<InputReservationFailedData>> captor = ArgumentCaptor.forClass(CloudEvent.class);
+        verify(outboxService).recordCloudEvent(captor.capture());
+
+        CloudEvent<InputReservationFailedData> failedEvent = captor.getValue();
+        assertEquals("com.farmflow.supply.input.reservation.failed.v1", failedEvent.type());
+        assertEquals("farm-uberaba", failedEvent.tenantId());
+        assertEquals("act-200", failedEvent.data().activityId());
+        assertEquals("item-calcario", failedEvent.data().itemId());
+        assertEquals(500.0, failedEvent.data().requestedQuantity());
+        assertEquals("INSUFFICIENT_STOCK", failedEvent.data().reason());
+        verify(farmFlowMetrics).incrementConsumerProcessed("ActivityCompleted");
     }
 
     @Test
