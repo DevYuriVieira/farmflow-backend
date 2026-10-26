@@ -40,6 +40,11 @@ class RabbitMqTopologyConfigTest {
         Queue pestQueue = config.pestDetectedQueue();
         assertEquals("farmflow.pest.detected", pestQueue.getName());
         assertEquals("farmflow.events.dlx", pestQueue.getArguments().get("x-dead-letter-exchange"));
+
+        Queue inputReservedQueue = config.inputReservedQueue();
+        assertEquals("farmflow.supply.input.reserved", inputReservedQueue.getName());
+        assertEquals("farmflow.events.dlx", inputReservedQueue.getArguments().get("x-dead-letter-exchange"));
+        assertEquals("supply.input.reserved.retry.10s", inputReservedQueue.getArguments().get("x-dead-letter-routing-key"));
     }
 
     @Test
@@ -67,6 +72,7 @@ class RabbitMqTopologyConfigTest {
         Queue telemetryQueue = config.telemetryAlertsQueue();
         Queue pestQueue = config.pestDetectedQueue();
         Queue machineryQueue = config.machineryMaintenanceQueue();
+        Queue inputReservedQueue = config.inputReservedQueue();
 
         Queue retry10s = config.retry10sQueue();
         Queue retry30s = config.retry30sQueue();
@@ -77,18 +83,23 @@ class RabbitMqTopologyConfigTest {
         assertEquals("telemetry.alerts.#", config.telemetryRetryReturnBinding(telemetryQueue, mainExchange).getRoutingKey());
         assertEquals("pest.detected.#", config.pestBinding(pestQueue, mainExchange).getRoutingKey());
         assertEquals("machinery.maintenance.#", config.machineryBinding(machineryQueue, mainExchange).getRoutingKey());
+        assertEquals("supply.input.reserved.#", config.inputReservedBinding(inputReservedQueue, mainExchange).getRoutingKey());
+        assertEquals("supply.input.reserved.retry.#", config.inputReservedRetryReturnBinding(inputReservedQueue, mainExchange).getRoutingKey());
 
         assertEquals("telemetry.alerts.retry.10s", config.retry10sBinding(retry10s, dlxExchange).getRoutingKey());
         assertEquals("pest.detected.retry.10s", config.retry10sPestBinding(retry10s, dlxExchange).getRoutingKey());
         assertEquals("machinery.maintenance.retry.10s", config.retry10sMachineryBinding(retry10s, dlxExchange).getRoutingKey());
+        assertEquals("supply.input.reserved.retry.10s", config.retry10sInputReservedBinding(retry10s, dlxExchange).getRoutingKey());
 
         assertEquals("telemetry.alerts.retry.30s", config.retry30sBinding(retry30s, dlxExchange).getRoutingKey());
         assertEquals("pest.detected.retry.30s", config.retry30sPestBinding(retry30s, dlxExchange).getRoutingKey());
         assertEquals("machinery.maintenance.retry.30s", config.retry30sMachineryBinding(retry30s, dlxExchange).getRoutingKey());
+        assertEquals("supply.input.reserved.retry.30s", config.retry30sInputReservedBinding(retry30s, dlxExchange).getRoutingKey());
 
         assertEquals("telemetry.alerts.retry.90s", config.retry90sBinding(retry90s, dlxExchange).getRoutingKey());
         assertEquals("pest.detected.retry.90s", config.retry90sPestBinding(retry90s, dlxExchange).getRoutingKey());
         assertEquals("machinery.maintenance.retry.90s", config.retry90sMachineryBinding(retry90s, dlxExchange).getRoutingKey());
+        assertEquals("supply.input.reserved.retry.90s", config.retry90sInputReservedBinding(retry90s, dlxExchange).getRoutingKey());
 
         assertEquals("events.dlq", config.dlqBinding(dlq, dlxExchange).getRoutingKey());
     }
