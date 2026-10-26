@@ -265,6 +265,44 @@ class CloudEventContractTest {
         );
     }
 
+    @Test
+    @DisplayName("InputReservationFailed: deve serializar conforme schema canônico")
+    void shouldSerializeAndValidateInputReservationFailedCloudEventAgainstJsonSchema() throws Exception {
+        InputReservationFailedData data = new InputReservationFailedData(
+                "fail-100", "farm-mg", "act-200", "item-fert-01",
+                75.0, "INSUFFICIENT_STOCK", Instant.parse("2026-10-26T12:00:00Z")
+        );
+
+        CloudEvent<InputReservationFailedData> event = new CloudEvent<>(
+                "evt-fail-1", "https://farmflow.com/supply-service",
+                "com.farmflow.supply.input.reservation.failed.v1", "1.0",
+                Instant.parse("2026-10-26T12:00:01Z"),
+                "farm-mg", "corr-fail-1", data
+        );
+
+        String json = objectMapper.writeValueAsString(event);
+        JsonNode node = objectMapper.readTree(json);
+
+        assertSchemaConformance("/contracts/events/input-reservation-failed-v1.json", node);
+        assertEquals("INSUFFICIENT_STOCK", node.path("data").path("reason").asText());
+        assertEquals(75.0, node.path("data").path("requestedQuantity").asDouble());
+        assertEquals("item-fert-01", node.path("data").path("itemId").asText());
+    }
+
+    @Test
+    @DisplayName("InputReservationFailed: deve rejeitar quantidade negativa ou campos em branco")
+    void shouldRejectInvalidInputReservationFailedData() {
+        assertThrows(IllegalArgumentException.class, () ->
+                new InputReservationFailedData("f-1", "farm-1", "act-1", "item-1", -10.0, "OUT_OF_STOCK", Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new InputReservationFailedData("f-1", "farm-1", "act-1", "item-1", 0.0, "OUT_OF_STOCK", Instant.now())
+        );
+        assertThrows(IllegalArgumentException.class, () ->
+                new InputReservationFailedData(" ", "farm-1", "act-1", "item-1", 10.0, "OUT_OF_STOCK", Instant.now())
+        );
+    }
+
     private void assertSchemaConformance(String schemaResourcePath, JsonNode payloadNode) throws Exception {
         try (InputStream is = getClass().getResourceAsStream(schemaResourcePath)) {
             assertNotNull(is, "Schema resource must exist: " + schemaResourcePath);
