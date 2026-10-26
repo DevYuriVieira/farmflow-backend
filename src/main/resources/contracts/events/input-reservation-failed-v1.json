@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://farmflow.com/contracts/events/input-reservation-failed-v1.json",
+  "title": "InputReservationFailedEvent",
+  "description": "CloudEvents schema for inventory input reservation failure events in FarmFlow Supply",
+  "type": "object",
+  "required": ["id", "source", "type", "specversion", "time", "tenantId", "correlationId", "data"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "format": "uri"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.farmflow.supply.input.reservation.failed.v1"
+    },
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "required": ["failureId", "farmId", "activityId", "itemId", "requestedQuantity", "reason", "failedAt"],
+      "properties": {
+        "failureId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "farmId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "itemId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestedQuantity": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
