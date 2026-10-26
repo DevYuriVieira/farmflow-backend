@@ -205,6 +205,7 @@ class OutboxServiceTest {
         assertEquals("telemetry.alert.critical", outboxService.resolveRoutingKey("com.farmflow.telemetry.alert.raised.v1"));
         assertEquals("machinery.maintenance.scheduled", outboxService.resolveRoutingKey("com.farmflow.machinery.maintenance.scheduled.v1"));
         assertEquals("machinery.maintenance.hours", outboxService.resolveRoutingKey("com.farmflow.machinery.hours.updated.v1"));
+        assertEquals("supply.input.reservation.failed", outboxService.resolveRoutingKey("com.farmflow.supply.input.reservation.failed.v1"));
     }
 
     @Test
