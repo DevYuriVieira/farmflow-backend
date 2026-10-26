@@ -94,6 +94,54 @@ class ConsumerResilienceTest {
     }
 
     @Test
+    void shouldProcessCanonicalCloudEventInTelemetryAlertConsumer() {
+        String cePayload = """
+            {
+              "specversion": "1.0",
+              "id": "evt-telemetry-ce-1",
+              "source": "https://farmflow.com/telemetry-service",
+              "type": "com.farmflow.telemetry.alert.raised.v1",
+              "tenantid": "farm-tel-ce-1",
+              "data": {
+                "readingId": "read-ce-1",
+                "farmId": "farm-tel-ce-1",
+                "plantationId": "plt-tel-ce-2",
+                "sensorId": "sensor-soil-99",
+                "telemetryType": "SOIL_MOISTURE",
+                "value": 12.0,
+                "unit": "%",
+                "severity": "CRITICAL",
+                "alertReason": "Low soil moisture: 12.0%",
+                "observedAt": "2026-10-26T12:00:00Z"
+              }
+            }
+            """;
+        MessageProperties props = new MessageProperties();
+        props.setMessageId("evt-telemetry-ce-1");
+        Message message = new Message(cePayload.getBytes(StandardCharsets.UTF_8), props);
+
+        doAnswer(invocation -> {
+            Runnable effect = invocation.getArgument(3);
+            effect.run();
+            return true;
+        }).when(deduplicationService).executeIfNew(
+                eq(TelemetryAlertConsumer.CONSUMER_NAME),
+                eq("evt-telemetry-ce-1"),
+                eq("TelemetryAlert"),
+                any(Runnable.class)
+        );
+
+        telemetryConsumer.handleTelemetryAlert(message);
+
+        ArgumentCaptor<FarmActivity> captor = ArgumentCaptor.forClass(FarmActivity.class);
+        verify(activityRepository, times(1)).save(captor.capture());
+        FarmActivity savedActivity = captor.getValue();
+        assertEquals("farm-tel-ce-1", savedActivity.getFarmId());
+        assertEquals("plt-tel-ce-2", savedActivity.getPlantationId());
+        assertEquals("Telemetry Alert Inspection: sensor-soil-99", savedActivity.getTitle());
+    }
+
+    @Test
     void shouldDiscardDuplicateTelemetryMessageWithoutSideEffects() {
         MessageProperties props = new MessageProperties();
         props.setMessageId("tel-dup-123");
