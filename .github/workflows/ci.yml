@@ -109,7 +109,7 @@ jobs:
           retention-days: 14
 
       - name: Security Vulnerability Scan (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
