@@ -26,6 +26,7 @@ public class RabbitMqTopologyConfig {
     public static final String ACTIVITY_COMPLETED_QUEUE = "farmflow.activity.completed";
     public static final String INPUT_RESERVATION_FAILED_QUEUE = "farmflow.supply.input.reservation.failed";
     public static final String INPUT_RESERVED_QUEUE = "farmflow.supply.input.reserved";
+    public static final String MACHINERY_ACTIVITY_COMPLETED_QUEUE = "farmflow.machinery.activity.completed";
 
     public static final String RETRY_10S_QUEUE = "farmflow.events.retry.10s";
     public static final String RETRY_30S_QUEUE = "farmflow.events.retry.30s";
@@ -41,6 +42,7 @@ public class RabbitMqTopologyConfig {
     public static final String ROUTING_INPUT_RESERVATION_FAILED_RETRY_RETURN = "supply.input.reservation.failed.retry.#";
     public static final String ROUTING_INPUT_RESERVED = "supply.input.reserved.#";
     public static final String ROUTING_INPUT_RESERVED_RETRY_RETURN = "supply.input.reserved.retry.#";
+    public static final String ROUTING_MACHINERY_ACTIVITY_COMPLETED_RETRY_RETURN = "machinery.activity.completed.retry.#";
 
     @Bean
     public FanoutExchange unroutableExchange() {
@@ -118,6 +120,14 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Queue machineryActivityCompletedQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", "machinery.activity.completed.retry.10s");
+        return new Queue(MACHINERY_ACTIVITY_COMPLETED_QUEUE, true, false, false, args);
+    }
+
+    @Bean
     public Queue retry10sQueue() {
         Map<String, Object> args = new HashMap<>();
         args.put("x-message-ttl", 10000);
@@ -192,6 +202,16 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding machineryActivityBinding(Queue machineryActivityCompletedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(machineryActivityCompletedQueue).to(mainExchange).with(ROUTING_ACTIVITY);
+    }
+
+    @Bean
+    public Binding machineryActivityRetryReturnBinding(Queue machineryActivityCompletedQueue, TopicExchange mainExchange) {
+        return BindingBuilder.bind(machineryActivityCompletedQueue).to(mainExchange).with(ROUTING_MACHINERY_ACTIVITY_COMPLETED_RETRY_RETURN);
+    }
+
+    @Bean
     public Binding retry10sBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("telemetry.alerts.retry.10s");
     }
@@ -219,6 +239,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry10sInputReservedBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("supply.input.reserved.retry.10s");
+    }
+
+    @Bean
+    public Binding retry10sMachineryActivityCompletedBinding(Queue retry10sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry10sQueue).to(dlxExchange).with("machinery.activity.completed.retry.10s");
     }
 
     @Bean
@@ -252,6 +277,11 @@ public class RabbitMqTopologyConfig {
     }
 
     @Bean
+    public Binding retry30sMachineryActivityCompletedBinding(Queue retry30sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry30sQueue).to(dlxExchange).with("machinery.activity.completed.retry.30s");
+    }
+
+    @Bean
     public Binding retry90sBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("telemetry.alerts.retry.90s");
     }
@@ -279,6 +309,11 @@ public class RabbitMqTopologyConfig {
     @Bean
     public Binding retry90sInputReservedBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
         return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("supply.input.reserved.retry.90s");
+    }
+
+    @Bean
+    public Binding retry90sMachineryActivityCompletedBinding(Queue retry90sQueue, DirectExchange dlxExchange) {
+        return BindingBuilder.bind(retry90sQueue).to(dlxExchange).with("machinery.activity.completed.retry.90s");
     }
 
     @Bean
