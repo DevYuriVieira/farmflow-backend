@@ -12,6 +12,7 @@ services:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-app-role.sql:/docker-entrypoint-initdb.d/init-app-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d farmflow"]
       interval: 5s
@@ -98,12 +99,15 @@ services:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: core,prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-farmflow}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_USERNAME: ${APP_DB_USER:-farmflow_app}
+      SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-farmflow}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+      FARMFLOW_SYSTEM_MAINTENANCE_TOKEN: ${FARMFLOW_SYSTEM_MAINTENANCE_TOKEN:?FARMFLOW_SYSTEM_MAINTENANCE_TOKEN must be set in environment or .env file (min 32 characters in production)}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
     networks:
       - farmflow-network
@@ -127,8 +131,10 @@ services:
       SERVER_PORT: 8082
       SPRING_PROFILES_ACTIVE: supply,prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-farmflow}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_USERNAME: ${APP_DB_USER:-farmflow_app}
+      SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-farmflow}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
@@ -156,8 +162,10 @@ services:
       SERVER_PORT: 8083
       SPRING_PROFILES_ACTIVE: iot,prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-farmflow}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_USERNAME: ${APP_DB_USER:-farmflow_app}
+      SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-farmflow}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
@@ -185,8 +193,10 @@ services:
       SERVER_PORT: 8084
       SPRING_PROFILES_ACTIVE: fleet,prod
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-farmflow}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_USERNAME: ${APP_DB_USER:-farmflow_app}
+      SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD:-farmflow}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-guest}
