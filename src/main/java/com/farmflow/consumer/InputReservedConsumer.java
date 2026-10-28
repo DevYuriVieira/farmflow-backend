@@ -26,6 +26,8 @@ public class InputReservedConsumer {
 
     private final MessageDeduplicationService deduplicationService;
     private final ActivityRepository activityRepository;
+    private final com.farmflow.repository.SagaAuditLogRepository sagaAuditLogRepository;
+    private final com.farmflow.service.OutboxService outboxService;
     private final ObjectMapper objectMapper;
     private final FarmFlowMetrics farmFlowMetrics;
     private final AmqpRetryRouter retryRouter;
@@ -59,21 +61,30 @@ public class InputReservedConsumer {
                 return;
             }
 
-            boolean processed = deduplicationService.executeIfNew(
-                    CONSUMER_NAME,
-                    messageId,
-                    "InputReserved",
-                    () -> applyBusinessEffect(payload, messageId)
-            );
-
-            if (!processed) {
-                farmFlowMetrics.incrementConsumerDuplicate("InputReserved");
-                log.info("Input reserved event duplicate discarded: messageId={}", messageId);
-                return;
+            String tenantId = extractTenantId(payload);
+            if (tenantId != null && !tenantId.isBlank()) {
+                com.farmflow.config.TenantContext.setTenantId(tenantId);
             }
 
-            farmFlowMetrics.incrementConsumerProcessed("InputReserved");
-            log.info("Successfully processed input reserved confirmation: messageId={}", messageId);
+            try {
+                boolean processed = deduplicationService.executeIfNew(
+                        CONSUMER_NAME,
+                        messageId,
+                        "InputReserved",
+                        () -> applyBusinessEffect(payload, messageId)
+                );
+
+                if (!processed) {
+                    farmFlowMetrics.incrementConsumerDuplicate("InputReserved");
+                    log.info("Input reserved event duplicate discarded: messageId={}", messageId);
+                    return;
+                }
+
+                farmFlowMetrics.incrementConsumerProcessed("InputReserved");
+                log.info("Successfully processed input reserved confirmation: messageId={}", messageId);
+            } finally {
+                com.farmflow.config.TenantContext.clear();
+            }
         } catch (Exception e) {
             log.error("Error processing input reserved message {}: {}", messageId, e.getMessage(), e);
             farmFlowMetrics.incrementConsumerFailed("InputReserved");
@@ -88,6 +99,21 @@ public class InputReservedConsumer {
         }
     }
 
+    private String extractTenantId(String payload) {
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            JsonNode dataNode = root.hasNonNull("data") ? root.get("data") : root;
+            if (dataNode.hasNonNull("farmId")) {
+                return dataNode.get("farmId").asText();
+            }
+            if (root.hasNonNull("tenantId")) {
+                return root.get("tenantId").asText();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private void applyBusinessEffect(String payload, String messageId) {
         try {
             JsonNode root = objectMapper.readTree(payload);
@@ -97,8 +123,6 @@ public class InputReservedConsumer {
             String farmId = dataNode.hasNonNull("farmId") ? dataNode.get("farmId").asText() :
                     (root.hasNonNull("tenantId") ? root.get("tenantId").asText() : null);
             String itemId = dataNode.hasNonNull("itemId") ? dataNode.get("itemId").asText() : "unknown-item";
-            double quantity = dataNode.hasNonNull("quantity") ? dataNode.get("quantity").asDouble() : 0.0;
-            String unit = dataNode.hasNonNull("unit") ? dataNode.get("unit").asText() : "UN";
 
             if (farmId == null || farmId.isBlank()) {
                 throw new IllegalArgumentException("Missing required farmId in input reserved payload: " + payload);
@@ -107,21 +131,39 @@ public class InputReservedConsumer {
                 throw new IllegalArgumentException("Missing required activityId in input reserved payload: " + payload);
             }
 
-            activityRepository.findById(activityId).ifPresent(activity -> {
-                String currentNotes = activity.getNotes() != null ? activity.getNotes() : "";
-                String confirmationNote = "[CONFIRMED: Reserved " + quantity + " " + unit + " of item " + itemId + "]";
-                String updatedNotes = currentNotes.isBlank() ? confirmationNote : currentNotes + " " + confirmationNote;
-                activity.updateDetails(
-                        activity.getTitle(),
-                        activity.getActivityType(),
-                        activity.getDate(),
-                        activity.getActivityPriority(),
-                        updatedNotes,
-                        activity.getCostEstimate()
-                );
-                activityRepository.save(activity);
-                log.info("Activity {} successfully confirmed with stock allocation for itemId={}", activityId, itemId);
-            });
+            com.farmflow.entity.FarmActivity activity = activityRepository.findByIdAndFarmId(activityId, farmId)
+                    .orElseThrow(() -> new IllegalArgumentException("Activity not found or tenant mismatch: id=" + activityId + ", farmId=" + farmId));
+
+            activity.confirmInputReservation();
+            activityRepository.save(activity);
+
+            com.farmflow.entity.SagaAuditLog auditLog = com.farmflow.entity.SagaAuditLog.builder()
+                    .farmId(farmId)
+                    .activityId(activityId)
+                    .sagaType("ACTIVITY_INPUT_RESERVATION")
+                    .transitionFrom(com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION.name())
+                    .transitionTo(com.farmflow.enums.ActivityStatus.COMPLETED.name())
+                    .reason("Stock allocation confirmed for itemId=" + itemId)
+                    .correlationId(messageId)
+                    .executedAt(java.time.Instant.now())
+                    .build();
+            sagaAuditLogRepository.save(auditLog);
+
+            com.farmflow.event.cloudevents.CloudEvent<java.util.Map<String, Object>> event = com.farmflow.event.cloudevents.CloudEvent.of(
+                    "https://farmflow.com/core-service",
+                    "com.farmflow.activity.confirmed.v1",
+                    farmId,
+                    messageId,
+                    java.util.Map.of(
+                            "activityId", activityId,
+                            "farmId", farmId,
+                            "itemId", itemId,
+                            "status", com.farmflow.enums.ActivityStatus.COMPLETED.name()
+                    )
+            );
+            outboxService.recordCloudEvent(event);
+
+            log.info("Activity {} successfully transitioned to COMPLETED with input reservation confirmed for item {}", activityId, itemId);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {

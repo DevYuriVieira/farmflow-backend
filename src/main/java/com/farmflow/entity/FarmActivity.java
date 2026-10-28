@@ -42,6 +42,10 @@ public class FarmActivity extends AuditableEntity {
     @Column(nullable = false, length = 50)
     private ActivityPriority priority = ActivityPriority.MEDIUM;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private com.farmflow.enums.ActivityStatus status = com.farmflow.enums.ActivityStatus.IN_PROGRESS;
+
     @Column(length = 1000)
     private String notes;
 
@@ -59,6 +63,7 @@ public class FarmActivity extends AuditableEntity {
             String date,
             Boolean completed,
             ActivityPriority priority,
+            com.farmflow.enums.ActivityStatus status,
             String notes,
             Double costEstimate,
             String completedAt
@@ -85,6 +90,7 @@ public class FarmActivity extends AuditableEntity {
         this.date = (date != null && !date.isBlank()) ? date : LocalDate.now().toString();
         this.completed = completed != null ? completed : false;
         this.priority = priority != null ? priority : ActivityPriority.MEDIUM;
+        this.status = status != null ? status : (Boolean.TRUE.equals(this.completed) ? com.farmflow.enums.ActivityStatus.COMPLETED : com.farmflow.enums.ActivityStatus.IN_PROGRESS);
         this.notes = notes;
         this.costEstimate = costEstimate;
         this.completedAt = completedAt;
@@ -131,17 +137,52 @@ public class FarmActivity extends AuditableEntity {
     }
 
     public boolean complete() {
-        if (Boolean.TRUE.equals(this.completed)) {
+        if (Boolean.TRUE.equals(this.completed) || this.status == com.farmflow.enums.ActivityStatus.COMPLETED) {
             return false;
         }
+        this.status = com.farmflow.enums.ActivityStatus.COMPLETED;
         this.completed = true;
         this.completedAt = Instant.now().toString();
         return true;
     }
 
     public void reopen() {
+        this.status = com.farmflow.enums.ActivityStatus.IN_PROGRESS;
         this.completed = false;
         this.completedAt = null;
+    }
+
+    public void markPendingConfirmation() {
+        if (this.status == com.farmflow.enums.ActivityStatus.COMPLETED) {
+            return;
+        }
+        this.status = com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION;
+    }
+
+    public boolean confirmInputReservation() {
+        if (this.status == com.farmflow.enums.ActivityStatus.COMPLETED) {
+            return false;
+        }
+        if (this.status != com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION && this.status != com.farmflow.enums.ActivityStatus.IN_PROGRESS) {
+            throw new BusinessException("Cannot confirm input reservation for activity in status " + this.status);
+        }
+        this.status = com.farmflow.enums.ActivityStatus.COMPLETED;
+        this.completed = true;
+        this.completedAt = Instant.now().toString();
+        return true;
+    }
+
+    public boolean compensateInputReservation(String reason) {
+        if (this.status == com.farmflow.enums.ActivityStatus.IN_PROGRESS) {
+            return false;
+        }
+        if (this.status != com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION && this.status != com.farmflow.enums.ActivityStatus.COMPLETED) {
+            throw new BusinessException("Cannot compensate input reservation for activity in status " + this.status);
+        }
+        this.status = com.farmflow.enums.ActivityStatus.IN_PROGRESS;
+        this.completed = false;
+        this.completedAt = null;
+        return true;
     }
 
     public void updateDetails(

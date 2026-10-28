@@ -39,6 +39,12 @@ class InputReservedConsumerTest {
     private ActivityRepository activityRepository;
 
     @Mock
+    private com.farmflow.repository.SagaAuditLogRepository sagaAuditLogRepository;
+
+    @Mock
+    private com.farmflow.service.OutboxService outboxService;
+
+    @Mock
     private FarmFlowMetrics farmFlowMetrics;
 
     @Mock
@@ -52,6 +58,8 @@ class InputReservedConsumerTest {
         sut = new InputReservedConsumer(
                 deduplicationService,
                 activityRepository,
+                sagaAuditLogRepository,
+                outboxService,
                 objectMapper,
                 farmFlowMetrics,
                 retryRouter
@@ -89,9 +97,9 @@ class InputReservedConsumerTest {
                 .title("Adubacao de Cobertura")
                 .type(ActivityType.FERTILIZATION)
                 .priority(ActivityPriority.MEDIUM)
-                .completed(true)
-                .notes("Atividade realizada")
-                .completedAt("2026-10-26T13:50:00Z")
+                .status(com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION)
+                .completed(false)
+                .notes("Atividade aguardando confirmacao de estoque")
                 .build();
 
         MessageProperties props = new MessageProperties();
@@ -111,7 +119,7 @@ class InputReservedConsumerTest {
                 any(Runnable.class)
         );
 
-        when(activityRepository.findById("act-101")).thenReturn(Optional.of(activity));
+        when(activityRepository.findByIdAndFarmId("act-101", "farm-uberaba")).thenReturn(Optional.of(activity));
 
         sut.handleInputReserved(message);
 
@@ -119,7 +127,11 @@ class InputReservedConsumerTest {
         verify(activityRepository).save(captor.capture());
         FarmActivity savedActivity = captor.getValue();
 
-        assertTrue(savedActivity.getNotes().contains("[CONFIRMED: Reserved 100.0 kg of item item-fertilizer-x]"));
+        assertEquals(com.farmflow.enums.ActivityStatus.COMPLETED, savedActivity.getStatus());
+        assertTrue(savedActivity.getCompleted());
+        assertNotNull(savedActivity.getCompletedAt());
+        verify(sagaAuditLogRepository).save(any(com.farmflow.entity.SagaAuditLog.class));
+        verify(outboxService).recordCloudEvent(any(com.farmflow.event.cloudevents.CloudEvent.class));
         verify(farmFlowMetrics).incrementConsumerProcessed("InputReserved");
         verifyNoInteractions(retryRouter);
     }
@@ -219,7 +231,7 @@ class InputReservedConsumerTest {
                 any(Runnable.class)
         );
 
-        when(activityRepository.findById("act-error")).thenThrow(new RuntimeException("Database connectivity lost"));
+        when(activityRepository.findByIdAndFarmId("act-error", "f-1")).thenThrow(new RuntimeException("Database connectivity lost"));
 
         sut.handleInputReserved(message);
 

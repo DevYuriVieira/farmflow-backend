@@ -14,4 +14,6 @@ public interface ActivityRepository extends JpaRepository<FarmActivity, String>,
     List<FarmActivity> findByFarmId(String farmId);
     List<FarmActivity> findByPlantationIdAndCompleted(String plantationId, Boolean completed);
     List<FarmActivity> findByType(ActivityType type);
+    java.util.Optional<FarmActivity> findByIdAndFarmId(String id, String farmId);
+    List<FarmActivity> findByStatusAndUpdatedAtBefore(com.farmflow.enums.ActivityStatus status, java.time.Instant cutoff);
 }

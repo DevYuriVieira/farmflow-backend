@@ -39,6 +39,12 @@ class InputReservationFailedConsumerTest {
     private ActivityRepository activityRepository;
 
     @Mock
+    private com.farmflow.repository.SagaAuditLogRepository sagaAuditLogRepository;
+
+    @Mock
+    private com.farmflow.service.OutboxService outboxService;
+
+    @Mock
     private FarmFlowMetrics farmFlowMetrics;
 
     @Mock
@@ -52,6 +58,8 @@ class InputReservationFailedConsumerTest {
         sut = new InputReservationFailedConsumer(
                 deduplicationService,
                 activityRepository,
+                sagaAuditLogRepository,
+                outboxService,
                 objectMapper,
                 farmFlowMetrics,
                 retryRouter
@@ -111,7 +119,7 @@ class InputReservationFailedConsumerTest {
                 any(Runnable.class)
         );
 
-        when(activityRepository.findById("act-101")).thenReturn(Optional.of(activity));
+        when(activityRepository.findByIdAndFarmId("act-101", "farm-uberaba")).thenReturn(Optional.of(activity));
 
         sut.handleInputReservationFailed(message);
 
@@ -119,9 +127,11 @@ class InputReservationFailedConsumerTest {
         verify(activityRepository).save(captor.capture());
 
         FarmActivity savedActivity = captor.getValue();
+        assertEquals(com.farmflow.enums.ActivityStatus.IN_PROGRESS, savedActivity.getStatus());
         assertFalse(savedActivity.getCompleted());
         assertNull(savedActivity.getCompletedAt());
-        assertTrue(savedActivity.getNotes().contains("[COMPENSATED: Insufficient inventory for item seed-soja-01]"));
+        verify(sagaAuditLogRepository).save(any(com.farmflow.entity.SagaAuditLog.class));
+        verify(outboxService).recordCloudEvent(any(com.farmflow.event.cloudevents.CloudEvent.class));
         verify(farmFlowMetrics).incrementConsumerProcessed("InputReservationFailed");
         verifyNoInteractions(retryRouter);
     }

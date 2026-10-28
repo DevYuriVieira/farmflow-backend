@@ -48,7 +48,9 @@ public class OutboxService {
             Map.entry("com.farmflow.telemetry.alert.raised.v1", "telemetry.alert.critical"),
             Map.entry("com.farmflow.machinery.maintenance.scheduled.v1", "machinery.maintenance.scheduled"),
             Map.entry("com.farmflow.machinery.hours.updated.v1", "machinery.maintenance.hours"),
-            Map.entry("com.farmflow.supply.input.reservation.failed.v1", "supply.input.reservation.failed")
+            Map.entry("com.farmflow.supply.input.reservation.failed.v1", "supply.input.reservation.failed"),
+            Map.entry("com.farmflow.activity.confirmed.v1", "activity.confirmed"),
+            Map.entry("com.farmflow.activity.compensated.v1", "activity.compensated")
     );
 
     private final OutboxRepository outboxRepository;

@@ -212,4 +212,60 @@ class FarmActivityDomainTest {
         assertEquals(ActivityPriority.MEDIUM, ActivityPriority.fromString(""));
         assertEquals(ActivityPriority.MEDIUM, ActivityPriority.fromString(null));
     }
+
+    @Test
+    void shouldTransitionThroughSagaLifecycleSuccessfully() {
+        FarmActivity activity = FarmActivity.builder()
+                .farmId("farm-001")
+                .plantationId("plantation-001")
+                .title("Plantio de Safra")
+                .build();
+
+        assertEquals(com.farmflow.enums.ActivityStatus.IN_PROGRESS, activity.getStatus());
+
+        activity.markPendingConfirmation();
+        assertEquals(com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION, activity.getStatus());
+
+        boolean confirmed = activity.confirmInputReservation();
+        assertTrue(confirmed);
+        assertEquals(com.farmflow.enums.ActivityStatus.COMPLETED, activity.getStatus());
+        assertTrue(activity.getCompleted());
+
+        assertFalse(activity.confirmInputReservation());
+    }
+
+    @Test
+    void shouldCompensatePendingActivitySuccessfully() {
+        FarmActivity activity = FarmActivity.builder()
+                .farmId("farm-001")
+                .plantationId("plantation-001")
+                .title("Pulverizacao")
+                .build();
+
+        activity.markPendingConfirmation();
+        assertEquals(com.farmflow.enums.ActivityStatus.PENDING_CONFIRMATION, activity.getStatus());
+
+        boolean compensated = activity.compensateInputReservation("Estoque insuficiente de insumo");
+        assertTrue(compensated);
+        assertEquals(com.farmflow.enums.ActivityStatus.IN_PROGRESS, activity.getStatus());
+        assertFalse(activity.getCompleted());
+
+        assertFalse(activity.compensateInputReservation("Nova tentativa"));
+    }
+
+    @Test
+    void shouldThrowExceptionOnIllegalSagaTransitions() {
+        FarmActivity activity = FarmActivity.builder()
+                .farmId("farm-001")
+                .plantationId("plantation-001")
+                .title("Colheita")
+                .status(com.farmflow.enums.ActivityStatus.CANCELLED)
+                .build();
+
+        assertThrows(BusinessException.class, activity::confirmInputReservation);
+
+        assertThrows(BusinessException.class, () ->
+                activity.compensateInputReservation("Tentativa em atividade cancelada")
+        );
+    }
 }
