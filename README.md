@@ -11,7 +11,8 @@
 [![Keycloak](https://img.shields.io/badge/Keycloak-26.1%20OIDC-blue?logo=keycloak&logoColor=white)](https://www.keycloak.org/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-W3C%20Tracing-000000?logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-386%20Passing-brightgreen?logo=junit5&logoColor=white)](#23-automated-testing-strategy)
+[![Tests](https://img.shields.io/badge/Tests-411%2B%20Passing-brightgreen?logo=junit5&logoColor=white)](#23-automated-testing-strategy)
+[![Flyway](https://img.shields.io/badge/Flyway-V1--V21%20Hardened-CC0202?logo=flyway&logoColor=white)](#7-postgresql-17--persistence)
 [![Trivy Scan](https://img.shields.io/badge/Trivy%20Scan-Passed%20(Zero%20CVEs)-brightgreen?logo=aquasec&logoColor=white)](#23-automated-testing-strategy)
 [![CI Pipeline](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/ci.yml)
 
@@ -34,27 +35,28 @@
 | **Architecture** | Clean Architecture + Domain-Driven Design (DDD) with strict context boundaries & CloudEvents |
 | **Runtime & Platform** | Java 21 LTS with **Project Loom Virtual Threads** (`spring.threads.virtual.enabled=true`) |
 | **Framework Ecosystem** | Spring Boot 4.1.1 (Spring MVC, Spring Data JPA, Spring Security 6, Spring AMQP) |
-| **Data Persistence** | PostgreSQL 17 Alpine with **Declarative Time-Series Partitioning** & **Row Level Security (RLS)** |
-| **ORM & Schema Migrations** | Hibernate 7 + PostgreSQL JDBC Driver + Flyway Migrations (V1 through V13) |
+| **Data Persistence** | PostgreSQL 17/18 with **Declarative Range Time-Series Partitioning**, **Fail-Closed RLS (`FORCE ROW LEVEL SECURITY`)**, and **BRIN Indexes** (pruning eliminates 12/13 partitions with 0.026ms overhead) |
+| **ORM & Schema Migrations** | Hibernate 7 + PostgreSQL JDBC Driver + **Flyway Migrations (V1 through V21)** with CI-automated `search_path` security audit on `pg_proc` |
 | **Asynchronous Messaging** | RabbitMQ 3.x with Topic Exchanges, Alternate Exchanges, Dead-Letter Exchanges & TTL retries |
 | **Event Reliability** | **Transactional Outbox Pattern** committed atomically with domain mutations in PostgreSQL |
 | **Outbox Concurrency** | **`FOR UPDATE SKIP LOCKED`** with lease timeouts (parallel worker instances without lock contention) |
-| **Distributed Saga Execution** | Choreographed Saga (`ActivityCompleted` &rarr; `Supply` atomic deduction &rarr; `InputReserved` confirmation &rarr; `Machinery` monotonic engine hours) |
+| **Distributed Saga Execution** | Choreographed Saga + **Distributed Advisory Locks (`pg_try_advisory_xact_lock`)** with timeout compensation, automatic leadership failover on pod crash, and dedicated `saga_audit_logs` |
 | **Event Contracts** | CNCF **CloudEvents v1.0** specification enforced via bidirectional JSON Schema v7 validation |
 | **Consumer Idempotency** | **Inbox Pattern** (`MessageDeduplicationService` + `processed_messages` table PK) |
 | **Fault Resilience** | Dead-Letter Exchange (DLX), staged TTL retry queues (10s, 30s, 90s), and terminal `.dlq` |
-| **Concurrency Control** | Optimistic Locking via JPA `@Version` + RFC 9457 HTTP 409 Conflict Problem Details |
-| **Multi-Tenancy & Security** | OAuth 2.0 / OIDC Resource Server via Keycloak 26.1 (RS256 + dynamic JWKS) + Method Security (`@PreAuthorize`) + PostgreSQL RLS (`app.current_farm_id`) |
+| **Concurrency Control** | Optimistic Locking via JPA `@Version` + **Atomic In-Place SQL Counters** (`incrementOperatingHoursAtomic`) stress-tested under 100 Virtual Threads (zero lost updates) |
+| **Multi-Tenancy & Security** | OAuth 2.0 / Keycloak 26.1 + `@PreAuthorize` + **Fail-Closed PostgreSQL RLS** (`NULLIF(current_setting(...))`) + Direct partition access revoked (`REVOKE ALL`) + Audited maintenance elevation (`system_maintenance_audit_trail`) |
 | **IDOR Protection** | `FarmSecurityEvaluator` returns HTTP 404 Not Found (instead of 403) to prevent tenant resource enumeration |
-| **Distributed Tracing** | OpenTelemetry W3C `traceparent` context propagation across HTTP &rarr; Outbox &rarr; RabbitMQ &rarr; Consumer |
+| **Data Lifecycle & Retention** | Automated monthly partition maintenance (`TelemetryPartitionMaintenanceService`): provision +3 months, detach > 36 months, purge > 48 months, default partition anomaly detection |
+| **Distributed Tracing** | OpenTelemetry W3C `traceparent` context propagation across HTTP &rarr; Outbox &rarr; RabbitMQ &rarr; Consumer &rarr; MDC |
 | **Error Handling** | RFC 9457 `ProblemDetails` with zero database credential, SQL syntax, or internal stack trace leakage |
 | **Runtime Rate Defense** | In-process fixed-window rate limiter (60 req/min) returning RFC 9457 (HTTP 429) & `Retry-After: 60` |
-| **Metrics & SRE Observability**| Micrometer (`farmflow.outbox.*`, `farmflow.consumer.*`) + Actuator `/liveness`, `/readiness`, `/dependencies` |
-| **Automated Testing** | **386 automated tests** (Unit, Concurrency, ArchUnit, Contract, Resilience, and Integration) |
-| **Quality Gates** | **JaCoCo Quality Gate** (Enforced $\ge 65\%$ instructions in CI / Observed $\sim 71\%$ instructions, $\sim 73\%$ lines, $\sim 84\%$ domain) + **PITest Mutation Testing** ($\ge 80\%$) + **Trivy Vulnerability Scan** (Zero CVEs) |
+| **SRE & Observability** | SLOs & Error Budgets (with automated Feature Freeze policy) + Micrometer custom gauges (`farmflow.outbox.oldest.message.age.seconds`, DLQ backlog) + Prometheus alerts |
+| **Automated Testing** | **411+ automated tests** (Unit, 100 Virtual Threads Concurrency Stress, Multi-Pod Chaos, ArchUnit, Contract, Resilience, and Integration) |
+| **Quality Gates** | **JaCoCo Quality Gate** (Enforced $\ge 65\%$ instructions in CI / Observed $\sim 71\%$ instructions, $\sim 73\%$ lines, $\sim 84\%$ domain) + **PITest Mutation Testing** ($\ge 80\%$) + **Trivy Vulnerability Scan** (Zero CVEs) + **ArchUnit** (13 rules) |
 | **Containerization** | Multi-stage Dockerfile (non-root UID 10001) + Modular Compose Profiles (`all-services`, `core`, `supply`, `machinery`, `iot`) |
 | **Engineering Tooling** | 100% offline local semantic code search in Python (LanceDB + SentenceTransformers `all-MiniLM-L6-v2`) for Java and ADRs |
-| **Load Testing & Automation** | k6 in JavaScript (ES6 `auth-helper.js` with Keycloak OIDC token acquisition via Password Grant) + PowerShell runner |
+| **Load Testing & Automation** | k6 in JavaScript (ES6 `auth-helper.js` with Keycloak OIDC token acquisition) + PowerShell runner (2,450 req/s sustained, zero 5xx) |
 
 ---
 
@@ -99,76 +101,18 @@
 - [27. Configuration & Environment Variables](#27-configuration--environment-variables)
 - [28. Architectural Decisions Fundamented](#28-architectural-decisions-fundamented)
 - [29. Deliberate Scope: Why NOT Redis / Kafka / WebFlux](#29-deliberate-scope-why-not-redis--kafka--webflux)
-- [30. Technical Review & Production Gate](#30-technical-review--production-gate)
-- [31. End-to-End Reliability Model](#31-end-to-end-reliability-model)
-- [32. Architecture Decision Records (ADRs)](#32-architecture-decision-records-adrs)
-- [33. Operational Runbooks (SRE)](#33-operational-runbooks-sre)
-- [34. Service Level Objectives (SLOs) & Error Budgets](#34-service-level-objectives-slos--error-budgets)
-- [35. Infrastructure & Health Baseline (In-Memory HTTP Benchmarks)](#35-infrastructure--health-baseline-in-memory-http-benchmarks)
-- [36. Domain Capacity & Saturation Validation (Database Transactional Benchmarks)](#36-domain-capacity--saturation-validation-database-transactional-benchmarks)
-- [37. Future Roadmap](#37-future-roadmap)
-- [38. Author](#38-author)
+- [30. End-to-End Reliability Model](#30-end-to-end-reliability-model)
+- [31. Architecture Decision Records (ADRs)](#31-architecture-decision-records-adrs)
+- [32. Operational Runbooks (SRE)](#32-operational-runbooks-sre)
+- [33. Service Level Objectives (SLOs) & Error Budgets](#33-service-level-objectives-slos--error-budgets)
+- [34. Infrastructure & Health Baseline (In-Memory HTTP Benchmarks)](#34-infrastructure--health-baseline-in-memory-http-benchmarks)
+- [35. Domain Capacity & Saturation Validation (Database Transactional Benchmarks)](#35-domain-capacity--saturation-validation-database-transactional-benchmarks)
+- [36. Future Roadmap](#36-future-roadmap)
+- [37. Author](#37-author)
 
 </details>
 
 ---
-
-
-## Table of Contents
-
-<details open>
-<summary><b>Click to expand / collapse full table of contents</b></summary>
-
-### Part I: Strategic Architecture & Domain Foundations
-- [1. Overview](#1-overview)
-- [2. Core Capabilities](#2-core-capabilities)
-- [3. System Architecture](#3-system-architecture)
-- [4. Clean Architecture](#4-clean-architecture)
-- [5. Domain Model](#5-domain-model)
-- [6. Business Rules & Consistency](#6-business-rules--consistency)
-- [7. PostgreSQL 17 & Persistence](#7-postgresql-17--persistence)
-- [8. Concurrency Control](#8-concurrency-control)
-
-### Part II: Distributed Messaging, Sagas & Resilience
-- [9. Transactional Outbox](#9-transactional-outbox)
-- [10. RabbitMQ Messaging](#10-rabbitmq-messaging)
-- [11. Business Event & Saga Choreography](#11-business-event--saga-choreography)
-- [12. Delivery Semantics & Reliability](#12-delivery-semantics--reliability)
-- [13. Idempotent Consumer](#13-idempotent-consumer)
-- [14. Retry Mechanism & Dead Letter Queue (DLQ)](#14-retry-mechanism--dead-letter-queue-dlq)
-- [15. Publisher Confirms](#15-publisher-confirms)
-- [16. Failure Scenarios Matrix](#16-failure-scenarios-matrix)
-
-### Part III: API Surface, Security & Observability
-- [17. REST API Endpoints Inventory](#17-rest-api-endpoints-inventory)
-- [18. Error Handling & ProblemDetails (RFC 9457)](#18-error-handling--problemdetails-rfc-9457)
-- [19. Authentication, OIDC, Keycloak & RBAC](#19-authentication-oidc-keycloak--rbac)
-- [20. End-to-End Distributed Tracing (OpenTelemetry & Jaeger)](#20-end-to-end-distributed-tracing-opentelemetry--jaeger)
-- [21. Observability & Health Checks](#21-observability--health-checks)
-- [22. Project Structure](#22-project-structure)
-
-### Part IV: Quality Gates, Operations, Runbooks & SRE
-- [23. Automated Testing Strategy](#23-automated-testing-strategy)
-- [24. Containerized Environment](#24-containerized-environment)
-- [25. Technology Stack](#25-technology-stack)
-- [26. Getting Started & Instructions](#26-getting-started--instructions)
-- [27. Configuration & Environment Variables](#27-configuration--environment-variables)
-- [28. Architectural Decisions Fundamented](#28-architectural-decisions-fundamented)
-- [29. Deliberate Scope: Why NOT Redis / Kafka / WebFlux](#29-deliberate-scope-why-not-redis--kafka--webflux)
-- [30. Technical Review & Production Gate](#30-technical-review--production-gate)
-- [31. End-to-End Reliability Model](#31-end-to-end-reliability-model)
-- [32. Architecture Decision Records (ADRs)](#32-architecture-decision-records-adrs)
-- [33. Operational Runbooks (SRE)](#33-operational-runbooks-sre)
-- [34. Service Level Objectives (SLOs) & Error Budgets](#34-service-level-objectives-slos--error-budgets)
-- [35. Infrastructure & Health Baseline (In-Memory HTTP Benchmarks)](#35-infrastructure--health-baseline-in-memory-http-benchmarks)
-- [36. Domain Capacity & Saturation Validation (Database Transactional Benchmarks)](#36-domain-capacity--saturation-validation-database-transactional-benchmarks)
-- [37. Future Roadmap](#37-future-roadmap)
-- [38. Author](#38-author)
-
-</details>
-
----
-
 
 ## 1. Overview
 
@@ -479,12 +423,12 @@ Incoming Request
 
 ---
 
-## 7. PostgreSQL 17 & Persistence
+## 7. PostgreSQL 17/18 & Persistence
 
-Database infrastructure uses PostgreSQL 17 managed via 13 versioned Flyway migrations:
+Database infrastructure uses PostgreSQL 17/18 managed via 21 versioned Flyway migrations (V1 through V21) enforcing defense-in-depth at the relational engine level:
 
 ```sql
--- Declarative Time-Series Partitioning for high-throughput IoT Telemetry
+-- 1. Declarative Time-Series Partitioning for high-throughput IoT Telemetry
 CREATE TABLE telemetry_readings (
     id VARCHAR(36) NOT NULL,
     farm_id VARCHAR(36) NOT NULL,
@@ -495,38 +439,57 @@ CREATE TABLE telemetry_readings (
     CONSTRAINT pk_telemetry PRIMARY KEY (id, recorded_at)
 ) PARTITION BY RANGE (recorded_at);
 
--- BRIN index for multi-million row sensor telemetry time series
+-- 2. BRIN index for multi-million row sensor telemetry time series
 CREATE INDEX idx_telemetry_recorded_at_brin ON telemetry_readings USING brin (recorded_at);
 
--- Partial index for active pending Outbox messages
+-- 3. Partial indexes for operational tables
 CREATE INDEX idx_outbox_unprocessed ON outbox_messages (occurred_on) WHERE status = 'PENDING';
-
--- Atomic partial index on active machine status
 CREATE INDEX idx_machinery_farm_status ON machinery (farm_id, status) WHERE status = 'OPERATIONAL';
 
--- Native Row Level Security (RLS) Policy Example
+-- 4. Fail-Closed Native Row Level Security (RLS) with FORCE RLS (Migration V14)
 ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+
 CREATE POLICY activities_tenant_isolation ON activities
     FOR ALL
     USING (
-        NULLIF(current_setting('app.current_farm_id', true), '') IS NULL
-        OR current_setting('app.current_farm_id', true) = 'BYPASS'
-        OR farm_id = current_setting('app.current_farm_id', true)
+        farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+        OR current_setting('app.system_bypass_rls', true) = 'true'
+    )
+    WITH CHECK (
+        farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+        OR current_setting('app.system_bypass_rls', true) = 'true'
     );
+
+-- 5. Child Partition Access Hardening (Migration V21)
+-- Direct access to child partitions and default partition is revoked for least-privilege role
+REVOKE ALL ON telemetry_readings_2026_10 FROM PUBLIC, farmflow_app;
+REVOKE ALL ON telemetry_readings_default FROM PUBLIC, farmflow_app;
+-- Queries MUST route through root table where FORCE RLS fail-closed policy is strictly evaluated
 ```
 
-### The Engineering Rationale Behind PostgreSQL 17 Foundations
+### The Engineering Rationale Behind PostgreSQL 17/18 Foundations
 
 #### 1. Why BRIN (Block Range Index) Beats B-Tree for Agricultural Telemetry
 In precision farming, soil moisture probes, weather stations, and tractor CAN bus sensors emit readings continuously in chronological order (`recorded_at`). Over a single harvest season, a commercial farm fleet generates 50+ million telemetry rows. A standard PostgreSQL B-Tree index on `recorded_at` would consume over 1.2 GB of disk and RAM, thrashing Hikari connection buffers and adding severe write-amplification penalty on SSDs on every single batch insert.
 By contrast, PostgreSQL's BRIN index divides the physical table into ranges of disk pages (default: 128 pages) and records only the minimum and maximum timestamp for each block range. For 50 million rows, the BRIN index requires only ~32 KB of RAM—a reduction of over 99.9%. When the API executes `SELECT * FROM telemetry_readings WHERE recorded_at BETWEEN :start AND :end`, PostgreSQL reads the tiny BRIN summary, instantly skips 98% of unaffected table blocks, and performs fast sequential reads only on matching blocks.
 
-#### 2. Declarative Monthly Partitioning for Zero-Downtime Data Eviction
-When historical sensor data exceeds its operational retention window (e.g. 24 months), running `DELETE FROM telemetry_readings WHERE recorded_at < NOW() - INTERVAL '2 years'` generates massive WAL traffic, table locks, and requires expensive `VACUUM` operations. With declarative monthly partitions (`PARTITION BY RANGE (recorded_at)`), purging historical data is an instantaneous metadata operation: `DROP TABLE telemetry_2024_01;` with zero downtime and zero index rebuilds.
+#### 2. Declarative Monthly Partitioning, Pruning & Automated Lifecycle
+When historical sensor data accumulates, FarmFlow uses declarative monthly partitions (`PARTITION BY RANGE (recorded_at)`).
+- **Physical Partition Pruning Verified:** As documented in [`docs/performance/RLS_PARTITION_PRUNING_BENCHMARK.md`](docs/performance/RLS_PARTITION_PRUNING_BENCHMARK.md), queries targeting a specific date range eliminate unaffected child partitions at the query plan stage (`"Subplans Removed": 12` out of 13 partitions). The measured RLS evaluation overhead on the surviving partition is only **0.026 ms** (< 0.5% execution penalty).
+- **Automated Lifecycle Service:** [`TelemetryPartitionMaintenanceService.java`](src/main/java/com/farmflow/service/TelemetryPartitionMaintenanceService.java) executes a monthly scheduled pipeline:
+  1. *Provisioning:* Automatically creates future partitions 3 months ahead via `SECURITY DEFINER` function with strict `search_path=public, pg_temp`.
+  2. *Hot-to-Cold Transition:* Automatically detaches partitions older than 36 months (`ALTER TABLE ... DETACH PARTITION`).
+  3. *Purge:* Drops detached partitions exceeding 48 months via `archive_and_drop_telemetry_partition`.
+  4. *Anomaly Detection:* Continuously audits `telemetry_readings_default` to catch unpartitioned or spoofed sensor packets.
 
-#### 3. Row Level Security (RLS) as the Physical Defense-in-Depth Barrier
-Application-layer security checks (`@PreAuthorize`) are necessary, but they represent a single point of failure. Over years of maintenance, refactoring, or under tight deadlines, developers inevitably write complex JPQL or native SQL queries. If a developer forgets the `AND a.farm.id = :farmId` clause, or if a dynamic specification fails to append the tenant predicate, multi-tenant isolation is breached.
-FarmFlow enforces PostgreSQL 17 native Row Level Security as an uncompromisable physical defense. When a request enters the application, FarmFlow's persistence interceptor executes `SET LOCAL app.current_farm_id = 'tenant-uuid'` on the database connection session. Even if an engineer writes `SELECT * FROM activities` with zero WHERE clauses, the PostgreSQL storage engine filters the rows at the disk block level. Cross-tenant data leakage is physically impossible at the database engine layer.
+#### 3. Row Level Security (RLS) as Fail-Closed Physical Defense
+Application-layer security checks (`@PreAuthorize`) are necessary, but they represent a single point of failure. If a developer forgets the tenant predicate or dynamic specification in a query, data can leak.
+FarmFlow enforces PostgreSQL native `FORCE ROW LEVEL SECURITY` with a fail-closed predicate:
+- If `app.current_farm_id` is null or empty string, `NULLIF(current_setting('app.current_farm_id', true), '')` evaluates to `NULL`, returning zero records.
+- All child partitions have `REVOKE ALL` applied to prevent direct query bypass.
+- 100% of `SECURITY DEFINER` functions fix `search_path=public, pg_temp`, verified automatically in CI against the `pg_proc` system catalog.
+- Emergency elevation is restricted to audited procedures writing to private `system_maintenance_audit_trail` (with unverified fallbacks categorically forbidden in production).
 
 ---
 
@@ -557,6 +520,25 @@ If stock is insufficient or the engine hours packet represents an outdated readi
 
 #### Why Monotonic Engine Hours Are Non-Negotiable in Agro-Industrial Fleets
 In heavy agricultural machinery (John Deere 8R tractors, Case Axial-Flow combines, self-propelled sprayers), engine hours dictate asset valuation, lease terms, factory warranty compliance, and mandatory preventive maintenance windows. In remote field operations, telemetry transmitters constantly face cellular dead zones. When a machine returns to connectivity, buffered telemetry packets frequently flush out of chronological order. If a packet from 10:00 AM (1,245.5 hours) arrives after a packet from 2:00 PM (1,249.0 hours), a naive update would roll back the machine's odometer. `MachineryRepository.updateOperatingHoursMonotonically` verifies at the database engine level that `m.operatingHours <= :newHours`. If an older packet arrives, the query updates 0 rows and rejects the rollback at the relational engine level.
+
+### 3. Atomic Delta Counters under Extreme Virtual Thread Contention
+For concurrent multi-operator shifts or simultaneous IoT events accumulating delta hours against the same machine, FarmFlow implements atomic in-place relational increments:
+```sql
+UPDATE machinery
+SET operating_hours = operating_hours + :delta,
+    version = version + 1
+WHERE id = :id;
+```
+- **100 Virtual Threads Stress Test:** Validated in [`MachineryHighContentionStressTest.java`](src/test/java/com/farmflow/concurrency/MachineryHighContentionStressTest.java). 100 Virtual Threads (Loom) are released simultaneously via `CountDownLatch` within nanoseconds against a single machine record.
+- **Mathematical Exactness:** Asserts `finalHours == initialHours + (100 * delta)` and `finalVersion == initialVersion + 100`. Standard deviation across executions is **0.0000**, with **zero lost updates** and no reliance on coarse-grained pessimistic table locks.
+
+### 4. Distributed Advisory Locks for Multi-Pod Leadership
+In clustered Kubernetes deployments, scheduled maintenance and saga compensation sweeps must execute on exactly one node without split-brain anomalies:
+```sql
+SELECT pg_try_advisory_xact_lock(:lockKey);
+```
+- **Zero-Infrastructure Coordination:** Uses PostgreSQL's native 64-bit transactional advisory lock (`pg_try_advisory_xact_lock`), eliminating the need to deploy and operate dedicated Redis or ZooKeeper clusters.
+- **Chaos-Tested Automatic Failover:** Validated in [`MultiPodDistributedAdvisoryLockChaosTest.java`](src/test/java/com/farmflow/resilience/MultiPodDistributedAdvisoryLockChaosTest.java). Three simulated pods compete for leadership. When the active leader connection experiences an abrupt network drop or container crash (`socket.close()`), the PostgreSQL kernel immediately releases the transaction lock at the connection level. The surviving standby pod acquires the lock in **< 50 ms** with **zero orphan locks** and zero operational intervention.
 
 ---
 
@@ -818,6 +800,11 @@ To guarantee zero message loss during publishing, Publisher Confirms are active 
 | `GET` | `/health/ready` | Readiness probe (verifies database pool) | `200 OK` / `503` |
 | `GET` | `/health/dependencies` | Diagnostic probe (detailed status of PostgreSQL and RabbitMQ with Degraded state) | `200 OK` / `503` |
 
+### Admin Operations (`/admin/dlq`) — `[Role: ADMIN]`
+| Method | Route | Purpose | Success |
+|:---:|:---|:---|:---:|
+| `POST` | `/admin/dlq/replay` | Inspect and replay dead-lettered messages back to original queues with header cleanup | `200 OK` |
+
 ### Concrete Field cURL Execution Examples
 
 ```bash
@@ -1019,32 +1006,35 @@ farmflow-backend/
 │   │   └── resources/
 │   │       ├── application.properties# Virtual Threads and runtime configuration
 │   │       ├── contracts/            # JSON Schema v7 contracts for CloudEvents
-│   │       └── db/migration/         # Flyway migrations V1 through V13
+│   │       └── db/migration/         # Flyway migrations V1 through V17
 │   └── test/
-│       └── java/com/farmflow/        # 386 automated test suites across all layers
+│       └── java/com/farmflow/        # 411 automated test suites across all layers
 ```
 
 ---
 
 ## 23. Automated Testing Strategy
 
-FarmFlow maintains **386 automated tests** executing with 100% success rate in CI:
+FarmFlow maintains **411 automated tests** executing with 100% success rate in CI:
 
 ```text
 Suite Execution Summary:
-  Total Test Cases: 386
+  Total Test Cases: 411
   Failures: 0
   Errors: 0
-  Skipped: 1 (Conditional Testcontainers fallback)
+  Skipped: 5 (Conditional Testcontainers fallback)
   Status: 100% GREEN
 ```
 
 ### Key Test Categories:
-- **Architecture Validation (ArchUnit):** 11 rules enforcing package boundaries, aggregate immutability, zero public setters, and zero web dependencies in domain.
+- **Architecture Validation (ArchUnit):** 13 rules enforcing package boundaries, aggregate immutability, zero public setters, `@PreAuthorize` endpoint coverage, and prohibition of note-based state mutations.
+- **High-Contention Concurrency Stress (100 Virtual Threads):** [`MachineryHighContentionStressTest.java`](src/test/java/com/farmflow/concurrency/MachineryHighContentionStressTest.java) executes 100 concurrent Virtual Threads (Loom) via `CountDownLatch` against atomic SQL counter increments with zero lost updates.
+- **Multi-Pod Distributed Chaos Engineering:** [`MultiPodDistributedAdvisoryLockChaosTest.java`](src/test/java/com/farmflow/resilience/MultiPodDistributedAdvisoryLockChaosTest.java) simulates 3 distinct pods competing for `pg_try_advisory_xact_lock`, injecting abrupt leader connection termination with instant failover and zero orphan locks.
+- **Multi-Tenancy RLS & Catalog Audit:** [`RlsTenantIsolationIntegrationTest.java`](src/test/java/com/farmflow/rls/RlsTenantIsolationIntegrationTest.java) validates fail-closed cross-tenant access, asserts direct access rejection on child/default partitions, and queries `pg_proc` in real PostgreSQL to enforce `search_path=public, pg_temp` on 100% of `SECURITY DEFINER` functions.
+- **Distributed Tracing Propagation (W3C OpenTelemetry):** [`DistributedTracingPropagationIntegrationTest.java`](src/test/java/com/farmflow/event/DistributedTracingPropagationIntegrationTest.java) asserts seamless extraction and re-injection of the `traceparent` header across HTTP &rarr; Outbox &rarr; AMQP &rarr; Consumer &rarr; MDC.
 - **Authentication & RBAC:** OIDC token validation, RS256 signatures, JWKS discovery, and role claims mapping.
-- **Distributed Tracing Tests:** Verifies W3C trace context propagation across HTTP, Outbox, RabbitMQ, and consumers.
-- **Outbox Concurrency Tests:** Multi-threaded tests proving parallel worker instances partition batches with zero overlap under `FOR UPDATE SKIP LOCKED`.
-- **Failure Injection & Resilience:** Asserts system behavior during simulated database crashes, broker outages, consumer crashes post-commit, and poisoned messages.
+- **Outbox Concurrency Tests:** Multi-worker tests proving 3 parallel worker instances partition batches with zero overlap under `FOR UPDATE SKIP LOCKED`.
+- **Failure Injection & Resilience:** Asserts system behavior during simulated database crashes, broker outages, consumer crashes post-commit, and poisoned messages with automated DLQ routing.
 - **JaCoCo Quality Gate:** Enforces $\ge 65\%$ instruction coverage on core business logic (with DTO/config/entity boilerplate excluded via pom.xml), passing in CI at $\sim 71\%$ instructions, $\sim 73\%$ lines, and $\sim 84\%$ domain coverage.
 - **Mutation Testing (PITest):** Evaluates test suite quality on domain Value Objects with mutation threshold $\ge 80\%$.
 - **Security Vulnerability Scanning (Trivy):** Continuous CI scanning blocking High and Critical CVEs.
@@ -1081,7 +1071,7 @@ graph TD
 | **Framework Platform** | Spring Boot 4.1.1 | Application framework, MVC routing, dependency injection |
 | **Data Persistence** | PostgreSQL 17 Alpine | Relational ACID storage, range partitioning, and RLS |
 | **ORM & Mappings** | Hibernate 7 / Spring Data JPA | Relational mapping, optimistic locking, and auditing |
-| **Schema Evolution** | Flyway 10.x / 11.x | Version-controlled idempotent migrations (V1 to V13) |
+| **Schema Evolution** | Flyway 10.x / 11.x | Version-controlled idempotent migrations (V1 to V17) |
 | **Message Broker** | RabbitMQ 3.x Alpine | Event fabric, topic exchanges, staged TTL retries, and DLQ |
 | **Identity Provider** | Keycloak 26.1 | OpenID Connect / OAuth 2.0 Resource Server, RS256 signing |
 | **Contract Specification**| CloudEvents v1.0 / JSON Schema | Standardized event envelopes and schema validation |
@@ -1119,7 +1109,7 @@ docker compose -f docker-compose.microservices.yml --profile all-services up --b
 
 ### 3. Run Automated Tests:
 ```bash
-# Run all 386 automated tests
+# Run all 411 automated tests
 ./mvnw clean test
 
 # Run tests with JaCoCo verification
@@ -1165,32 +1155,7 @@ docker compose -f docker-compose.microservices.yml --profile all-services up --b
 
 ---
 
-## 30. Technical Review & Production Gate
-
-The codebase was audited under an independent adversarial production gate review:
-
-```text
-==================================================
-           FINAL PRODUCTION GATE REVIEW
-==================================================
-  CRITICAL FINDINGS: 0
-  HIGH FINDINGS:     0
-  MEDIUM FINDINGS:   0
-  LOW FINDINGS:      0
-  STATUS:            APPROVED FOR PRODUCTION
-==================================================
-```
-
-Validated Production Gates:
-1. **Zero Dual-Write Loss:** Outbox with Publisher Confirms and `FOR UPDATE SKIP LOCKED`.
-2. **Saga Consistency:** Activity positive confirmation and compensation rollback verified.
-3. **Defense-in-Depth:** Keycloak OIDC + `@PreAuthorize` + IDOR 404 + PostgreSQL Row Level Security.
-4. **Test Excellence:** 386 tests passing with JaCoCo gate $\ge 65\%$ instruction threshold (passing in CI at $\sim 71\%$). PITest mutation score $\ge 80\%$ on Value Objects.
-5. **Runtime Modernity:** Java 21 Virtual Threads and multi-stage non-root container profiles.
-
----
-
-## 31. End-to-End Reliability Model
+## 30. End-to-End Reliability Model
 
 ```mermaid
 sequenceDiagram
@@ -1226,7 +1191,7 @@ sequenceDiagram
 
 ---
 
-## 32. Architecture Decision Records (ADRs)
+## 31. Architecture Decision Records (ADRs)
 
 | ADR | Title | Key Architectural Focus |
 |---|---|---|
@@ -1246,10 +1211,14 @@ sequenceDiagram
 | [ADR-014](docs/adr/ADR-014-multi-tenant-isolation-security.md) | Multi-Tenant Security Boundaries | Method-level authorization, IDOR protection, and PostgreSQL RLS |
 | [ADR-015](docs/adr/ADR-015-zero-comment-code-discipline.md) | Zero-Comment Code Discipline | Strict policy enforcing self-documenting, clean, and idiomatic code |
 | [ADR-016](docs/adr/ADR-016-openid-connect-keycloak.md) | OpenID Connect Keycloak Integration | OIDC Resource Server with RS256 tokens and dynamic JWKS discovery |
+| [ADR-017](docs/adr/ADR-017-rls-fail-closed-defense.md) | Fail-Closed Row Level Security (RLS) | PostgreSQL 17 kernel-enforced tenant isolation and non-owner role separation |
+| [ADR-018](docs/adr/ADR-018-telemetry-range-partitioning-brin.md) | Range Partitioning and BRIN Indexing | Time-series telemetry range partitioning with BRIN indexes for IoT scalability |
+| [ADR-019](docs/adr/ADR-019-atomic-delta-counters.md) | Atomic Delta Counters | Elimination of lost updates in machinery operating hours via atomic database updates |
+| [ADR-020](docs/adr/ADR-020-saga-state-machine-and-timeout.md) | Saga State Machine and Timeout | Choreographed cross-domain saga with explicit aggregate lifecycle and timeout sweeper |
 
 ---
 
-## 33. Operational Runbooks (SRE)
+## 32. Operational Runbooks (SRE)
 
 | Runbook | Trigger | Mitigation Action |
 |---|---|---|
@@ -1260,7 +1229,7 @@ sequenceDiagram
 
 ---
 
-## 34. Service Level Objectives (SLOs) & Error Budgets
+## 33. Service Level Objectives (SLOs) & Error Budgets
 
 | Flow | SLI | 30-Day Rolling SLO | Error Budget | Alert Threshold |
 |---|---|---|---|---|
@@ -1271,7 +1240,7 @@ sequenceDiagram
 
 ---
 
-## 35. Infrastructure & Health Baseline (In-Memory HTTP Benchmarks)
+## 34. Infrastructure & Health Baseline (In-Memory HTTP Benchmarks)
 
 Empirical load testing executed with **k6 v0.56.0** against diagnostic health probes:
 
@@ -1283,7 +1252,7 @@ Empirical load testing executed with **k6 v0.56.0** against diagnostic health pr
 
 ---
 
-## 36. Domain Capacity & Saturation Validation (Database Transactional Benchmarks)
+## 35. Domain Capacity & Saturation Validation (Database Transactional Benchmarks)
 
 Empirical load benchmarks directed at transactional write endpoints (`POST /activities` and `POST /telemetry/readings`):
 
@@ -1297,7 +1266,7 @@ Empirical load benchmarks directed at transactional write endpoints (`POST /acti
 
 ---
 
-## 37. Future Roadmap
+## 36. Future Roadmap
 
 - [x] **Authentication & Role-Based Access Control:** Keycloak 26.1 OIDC Resource Server with asymmetric RS256 token validation and dynamic JWKS discovery.
 - [x] **Distributed Tracing & Context Propagation:** W3C `traceparent` propagation across HTTP, Transactional Outbox, RabbitMQ, and Consumers with Jaeger.
@@ -1315,7 +1284,7 @@ Empirical load benchmarks directed at transactional write endpoints (`POST /acti
 
 ---
 
-## 38. Author
+## 37. Author
 
 **Author:** Yuri Vieira  
 **GitHub:** [https://github.com/DevYuriVieira](https://github.com/DevYuriVieira)
@@ -1332,27 +1301,28 @@ Empirical load benchmarks directed at transactional write endpoints (`POST /acti
 | **Arquitetura** | Clean Architecture + Domain-Driven Design (DDD) com fronteiras estritas e CloudEvents |
 | **Runtime & Plataforma** | Java 21 LTS com **Virtual Threads do Project Loom** (`spring.threads.virtual.enabled=true`) |
 | **Framework & Ecossistema** | Spring Boot 4.1.1 (Spring MVC, Spring Data JPA, Spring Security 6, Spring AMQP) |
-| **Persistência de Dados** | PostgreSQL 17 Alpine com **Particionamento Declarativo de Séries Temporais** e **Row Level Security (RLS)** |
-| **ORM & Migrações de Schema**| Hibernate 7 + Driver JDBC PostgreSQL + Migrações Flyway (V1 a V13) |
+| **Persistência de Dados** | PostgreSQL 17/18 com **Particionamento Declarativo por Range**, **Fail-Closed RLS (`FORCE ROW LEVEL SECURITY`)** e **Índices BRIN** (poda física elimina 12 de 13 partições com 0.026ms de overhead) |
+| **ORM & Migrações de Schema**| Hibernate 7 + Driver JDBC PostgreSQL + **Migrações Flyway (V1 a V21)** com auditoria automatizada de `search_path` no catálogo `pg_proc` no CI |
 | **Mensageria Assíncrona** | RabbitMQ 3.x com Topic Exchanges, Alternate Exchanges, Dead-Letter Exchanges e retries escalonados por TTL |
 | **Confiabilidade de Eventos** | **Transactional Outbox Pattern** comitado atomicamente com mutações de domínio no PostgreSQL |
 | **Concorrência no Outbox** | **`FOR UPDATE SKIP LOCKED`** com lease temporário (instâncias paralelas sem contenção de locks) |
-| **Orquestração de Saga** | Saga Coreografada (`ActivityCompleted` &rarr; Dedução atômica em `Supply` &rarr; Confirmação `InputReserved` &rarr; Avanço de horímetro em `Machinery`) |
+| **Orquestração de Saga** | Saga Coreografada + **Locks Consultivos Transacionais (`pg_try_advisory_xact_lock`)** com timeout e compensação, failover de líder sem locks órfãos e auditoria em `saga_audit_logs` |
 | **Contratos de Eventos** | Especificação CNCF **CloudEvents v1.0** validada bidirecionalmente com JSON Schema v7 |
 | **Idempotência de Consumo** | **Inbox Pattern** (`MessageDeduplicationService` + chave primária na tabela `processed_messages`) |
 | **Resiliência a Falhas** | Dead-Letter Exchange (DLX), filas de retry com TTL (10s, 30s, 90s) e fila terminal `.dlq` |
-| **Controle de Concorrência** | Concorrência Otimista com JPA `@Version` + RFC 9457 HTTP 409 Conflict Problem Details |
-| **Multi-Tenancy & Segurança** | Servidor de Recursos OIDC via Keycloak 26.1 (RS256 + JWKS dinâmico) + Method Security (`@PreAuthorize`) + PostgreSQL RLS (`app.current_farm_id`) |
+| **Controle de Concorrência** | Concorrência Otimista com JPA `@Version` + **Incrementos Relacionais Atômicos** (`incrementOperatingHoursAtomic`) sob 100 Virtual Threads (zero lost updates) |
+| **Multi-Tenancy & Segurança** | Servidor de Recursos OIDC via Keycloak 26.1 + `@PreAuthorize` + **PostgreSQL RLS Fail-Closed** (`NULLIF(current_setting(...))`) + Acesso direto revogado nas partições (`REVOKE ALL`) + Elevação auditada (`system_maintenance_audit_trail`) |
 | **Proteção contra IDOR** | `FarmSecurityEvaluator` retorna HTTP 404 Not Found (em vez de 403) para impedir enumeração de recursos entre inquilinos |
-| **Rastreamento Distribuído** | Propagação de contexto W3C `traceparent` de ponta a ponta: HTTP &rarr; Outbox &rarr; RabbitMQ &rarr; Consumidor |
+| **Ciclo de Vida de Dados** | Manutenção agendada mensal (`TelemetryPartitionMaintenanceService`): provisiona +3 meses, desacopla > 36 meses, purga > 48 meses, auditoria da partição default |
+| **Rastreamento Distribuído** | Propagação de contexto W3C `traceparent` de ponta a ponta: HTTP &rarr; Outbox &rarr; RabbitMQ &rarr; Consumidor &rarr; MDC |
 | **Tratamento de Falhas** | RFC 9457 `ProblemDetails` sanitizado com mascaramento total de credenciais, sintaxe SQL e stack traces |
 | **Proteção de Runtime** | Limitador de taxa local Fixed Window (60 req/min) respondendo RFC 9457 (HTTP 429) & `Retry-After: 60` |
-| **Métricas & SRE** | Micrometer (`farmflow.outbox.*`, `farmflow.consumer.*`) + Actuator `/liveness`, `/readiness`, `/dependencies` |
-| **Testes Automatizados** | **386 testes automatizados** (Unidade, Concorrência, ArchUnit, Contratos, Resiliência e Integração) |
-| **Quality Gates** | **JaCoCo Quality Gate** (Enforçado $\ge 65\%$ de instruções no CI / Aferido $\sim 71\%$ de instruções, $\sim 73\%$ de linhas, $\sim 84\%$ no domínio) + **PITest Mutation Testing** ($\ge 80\%$) + **Trivy Vulnerability Scan** (Zero CVEs) |
+| **SRE & Observabilidade** | SLOs & Error Budgets formais (com congelamento automático de deploys < 20%) + Métricas Micrometer de lag/DLQ + Alertas Prometheus |
+| **Testes Automatizados** | **411+ testes automatizados** (Unidade, Estresse sob 100 Virtual Threads, Caos Multi-Pod, ArchUnit, Contratos, Resiliência e Integração) |
+| **Quality Gates** | **JaCoCo Quality Gate** (Enforçado $\ge 65\%$ de instruções no CI / Aferido $\sim 71\%$ de instruções, $\sim 73\%$ de linhas, $\sim 84\%$ no domínio) + **PITest Mutation Testing** ($\ge 80\%$) + **Trivy Vulnerability Scan** (Zero CVEs) + **ArchUnit** (13 regras) |
 | **Containerização** | Dockerfile multi-stage com usuário não-root (UID 10001) + Perfis modulares Compose (`all-services`, `core`, `supply`, `machinery`, `iot`) |
 | **Ferramentas de Engenharia** | Busca semântica local 100% offline em Python (LanceDB + SentenceTransformers `all-MiniLM-L6-v2`) para código Java e ADRs |
-| **Testes de Carga & Automação** | k6 em JavaScript (ES6 `auth-helper.js` com aquisição de token Keycloak OIDC via Password Grant) + runner PowerShell |
+| **Testes de Carga & Automação** | k6 em JavaScript (ES6 `auth-helper.js` com aquisição de token Keycloak OIDC via Password Grant) + runner PowerShell (2.450 req/s sustentadas e zero 5xx) |
 
 ---
 
@@ -1397,15 +1367,14 @@ Empirical load benchmarks directed at transactional write endpoints (`POST /acti
 - [27. Configurações e Variáveis de Ambiente](#27-configurações-e-variáveis-de-ambiente)
 - [28. Decisões Arquiteturais Fundamentadas](#28-decisões-arquiteturais-fundamentadas)
 - [29. Escopo Deliberado: Por Que NÃO Redis / Kafka / WebFlux](#29-escopo-deliberado-por-que-não-redis--kafka--webflux)
-- [30. Revisão Técnica e Production Gate](#30-revisão-técnica-e-production-gate)
-- [31. Modelo de Confiabilidade Ponta a Ponta](#31-modelo-de-confiabilidade-ponta-a-ponta)
-- [32. Decisões Arquiteturais Formalizadas (ADRs)](#32-decisões-arquiteturais-formalizadas-adrs)
-- [33. Cadernos Operacionais de Remediação (SRE Runbooks)](#33-cadernos-operacionais-de-remediação-sre-runbooks)
-- [34. Objetivos de Nível de Serviço (SLOs) e Error Budgets](#34-objetivos-de-nível-de-serviço-slos-e-error-budgets)
-- [35. Baseline de Infraestrutura e Saúde (Benchmarks HTTP In-Memory)](#35-baseline-de-infraestrutura-e-saúde-benchmarks-http-in-memory)
-- [36. Capacidade de Domínio e Validação de Saturação (Benchmarks Transacionais)](#36-capacidade-de-domínio-e-validação-de-saturação-benchmarks-transacionais)
-- [37. Roadmap de Evoluções Futuras](#37-roadmap-de-evoluções-futuras)
-- [38. Autor](#38-autor-1)
+- [30. Modelo de Confiabilidade Ponta a Ponta](#30-modelo-de-confiabilidade-ponta-a-ponta)
+- [31. Decisões Arquiteturais Formalizadas (ADRs)](#31-decisões-arquiteturais-formalizadas-adrs)
+- [32. Cadernos Operacionais de Remediação (SRE Runbooks)](#32-cadernos-operacionais-de-remediação-sre-runbooks)
+- [33. Objetivos de Nível de Serviço (SLOs) e Error Budgets](#33-objetivos-de-nível-de-serviço-slos-e-error-budgets)
+- [34. Baseline de Infraestrutura e Saúde (Benchmarks HTTP In-Memory)](#34-baseline-de-infraestrutura-e-saúde-benchmarks-http-in-memory)
+- [35. Capacidade de Domínio e Validação de Saturação (Benchmarks Transacionais)](#35-capacidade-de-domínio-e-validação-de-saturação-benchmarks-transacionais)
+- [36. Roadmap de Evoluções Futuras](#36-roadmap-de-evoluções-futuras)
+- [37. Autor](#37-autor-1)
 
 </details>
 
@@ -1708,12 +1677,12 @@ Requisição do Usuário
 
 ---
 
-## 7. Persistência de Dados e PostgreSQL 17
+## 7. Persistência de Dados e PostgreSQL 17/18
 
-A infraestrutura utiliza o PostgreSQL 17 gerenciado através de 13 migrações Flyway:
+A infraestrutura utiliza o PostgreSQL 17/18 gerenciado através de 21 migrações Flyway (V1 a V21), impondo defesa em profundidade diretamente no motor relacional:
 
 ```sql
--- Particionamento Declarativo por Range para séries temporais de IoT
+-- 1. Particionamento Declarativo por Range para séries temporais de IoT
 CREATE TABLE telemetry_readings (
     id VARCHAR(36) NOT NULL,
     farm_id VARCHAR(36) NOT NULL,
@@ -1724,38 +1693,57 @@ CREATE TABLE telemetry_readings (
     CONSTRAINT pk_telemetry PRIMARY KEY (id, recorded_at)
 ) PARTITION BY RANGE (recorded_at);
 
--- Índice BRIN para milhões de medições de sensores IoT
+-- 2. Índice BRIN para milhões de medições de sensores IoT
 CREATE INDEX idx_telemetry_recorded_at_brin ON telemetry_readings USING brin (recorded_at);
 
--- Índice parcial para mensagens pendentes do Outbox
+-- 3. Índices parciais para tabelas operacionais
 CREATE INDEX idx_outbox_unprocessed ON outbox_messages (occurred_on) WHERE status = 'PENDING';
-
--- Índice parcial para máquinas em status operacional
 CREATE INDEX idx_machinery_farm_status ON machinery (farm_id, status) WHERE status = 'OPERATIONAL';
 
--- Política de Row Level Security (RLS) Nativa
+-- 4. Política de Row Level Security (RLS) Fail-Closed com FORCE RLS (Migração V14)
 ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+
 CREATE POLICY activities_tenant_isolation ON activities
     FOR ALL
     USING (
-        NULLIF(current_setting('app.current_farm_id', true), '') IS NULL
-        OR current_setting('app.current_farm_id', true) = 'BYPASS'
-        OR farm_id = current_setting('app.current_farm_id', true)
+        farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+        OR current_setting('app.system_bypass_rls', true) = 'true'
+    )
+    WITH CHECK (
+        farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+        OR current_setting('app.system_bypass_rls', true) = 'true'
     );
+
+-- 5. Hardening de Acesso a Partições Filhas e Default (Migração V21)
+-- Acesso direto DML é revogado de PUBLIC e farmflow_app em todas as partições
+REVOKE ALL ON telemetry_readings_2026_10 FROM PUBLIC, farmflow_app;
+REVOKE ALL ON telemetry_readings_default FROM PUBLIC, farmflow_app;
+-- Força que qualquer query atravesse a tabela raiz onde o FORCE RLS fail-closed é avaliado
 ```
 
-### Fundamentação de Engenharia do PostgreSQL 17
+### Fundamentação de Engenharia do PostgreSQL 17/18
 
 #### 1. Por Que Índices BRIN Superam B-Tree em Telemetria Agrícola
 Na agricultura de precisão, sondas de umidade de solo, estações meteorológicas e sensores CAN bus de tratores emitem leituras contínuas em ordem cronológica (`recorded_at`). Ao longo de uma única safra, a frota de uma fazenda comercial gera mais de 50 milhões de linhas de telemetria. Um índice B-Tree padrão no PostgreSQL sobre `recorded_at` consumiria mais de 1.2 GB de disco e RAM, causando churn no buffer pool do HikariCP e severa amplificação de escrita (write amplification) no SSD a cada lote inserido.
 Em contrapartida, o índice BRIN agrupa as páginas de disco (bloco de 128 páginas por padrão) e armazena apenas o timestamp mínimo e máximo daquele intervalo físico. Para 50 milhões de registros, o índice BRIN ocupa apenas ~32 KB de memória RAM—uma economia superior a 99.9%. Quando a API executa consultas temporais (`WHERE recorded_at BETWEEN :start AND :end`), o PostgreSQL lê o sumário leve do BRIN, ignora 98% dos blocos físicos não afetados e faz leitura sequencial ultraveloz apenas nos blocos pertinentes.
 
-#### 2. Particionamento Declarativo Mensal para Expurgos com Zero Downtime
-Quando os dados de sensores ultrapassam a janela de retenção regulatória (ex.: 24 meses), executar `DELETE FROM telemetry_readings WHERE recorded_at < NOW() - INTERVAL '2 years'` geraria tráfego massivo no WAL, travamentos em tabelas e exigiria `VACUUM` custoso. Com o particionamento declarativo mensal (`PARTITION BY RANGE (recorded_at)`), o descarte de dados históricos é uma operação atômica de metadados: `DROP TABLE telemetry_2024_01;` com zero impacto no banco e zero reconstrução de índices.
+#### 2. Particionamento Declarativo Mensal, Poda Física e Ciclo de Vida Automatizado
+Quando os dados de sensores se acumulam, o FarmFlow utiliza particionamento declarativo mensal:
+- **Poda Física de Partições (Partition Pruning):** Como documentado em [`docs/performance/RLS_PARTITION_PRUNING_BENCHMARK.md`](docs/performance/RLS_PARTITION_PRUNING_BENCHMARK.md), queries de intervalo temporal removem partições não afetadas na fase do plano (`"Subplans Removed": 12` de 13 partições). O overhead de avaliação da política RLS na partição sobrevivente é de apenas **0.026 ms** (< 0.5% do tempo de execução).
+- **Serviço de Ciclo de Vida Automatizado:** O [`TelemetryPartitionMaintenanceService.java`](src/main/java/com/farmflow/service/TelemetryPartitionMaintenanceService.java) executa pipeline agendado mensal:
+  1. *Provisionamento:* Cria dinamicamente partições futuras com 3 meses de antecedência via função `SECURITY DEFINER` com `search_path=public, pg_temp`.
+  2. *Transição Quente &rarr; Frio:* Desanexa partições com mais de 36 meses (`ALTER TABLE ... DETACH PARTITION`).
+  3. *Purga Definitiva:* Expurga partições desacopladas com mais de 48 meses via `archive_and_drop_telemetry_partition`.
+  4. *Detecção de Anomalias:* Inspeciona anomalias na partição `telemetry_readings_default` para identificar pacotes sem particionamento ou spoofados.
 
-#### 3. Row Level Security (RLS) como Barreira Física em Profundidade
-Validações na camada de aplicação (`@PreAuthorize`) são vitais, mas constituem um ponto único de falha humana. Ao longo de anos de manutenção ou sob pressão de entregas, desenvolvedores podem escrever queries JPQL ou SQL nativo esquecendo o predicado `AND a.farm.id = :farmId`.
-O FarmFlow impõe o Row Level Security nativo do PostgreSQL 17 como barreira física inegociável. Ao abrir uma conexão, o interceptor da aplicação executa `SET LOCAL app.current_farm_id = 'uuid-da-fazenda'` na sessão do banco. Mesmo se um desenvolvedor escrever `SELECT * FROM activities` sem nenhuma cláusula WHERE, o motor de armazenamento do PostgreSQL filtra os blocos no nível do kernel do banco. O vazamento de dados entre fazendas é fisicamente impossível no nível de persistência.
+#### 3. Row Level Security (RLS) como Barreira Física Fail-Closed
+Validações na camada de aplicação (`@PreAuthorize`) são vitais, mas constituem um ponto único de falha humana. Se um desenvolvedor escrever uma query esquecendo o filtro de inquilino, haverá vazamento de dados.
+O FarmFlow impõe `FORCE ROW LEVEL SECURITY` nativo no PostgreSQL de forma fail-closed:
+- Se `app.current_farm_id` for nulo ou string vazia, `NULLIF(current_setting('app.current_farm_id', true), '')` avalia para `NULL` e zero linhas são retornadas.
+- O acesso direto às partições filhas e à default é revogado (`REVOKE ALL`).
+- 100% das funções `SECURITY DEFINER` fixam `search_path=public, pg_temp`, comprovado por teste automatizado no CI via catálogo `pg_proc`.
+- Elevação de privilégio para manutenção é registrada na tabela privada `system_maintenance_audit_trail`, com fallbacks não-auditados categoricamente bloqueados em produção.
 
 ---
 
@@ -1786,6 +1774,25 @@ Se o estoque for insuficiente ou se o pacote de telemetria contiver horímetro i
 
 #### Por Que o Horímetro Monotônico é Inegociável em Frotas Agroindustriais
 Em maquinário agrícola pesado (tratores John Deere 8R, colheitadeiras axiais Case IH, pulverizadores autopropelidos), o horímetro define o valor venal de revenda da máquina, as cláusulas de garantia de fábrica e as paradas obrigatórias de manutenção preventiva. Em regiões de lavoura remota, os transmissores de telemetria operam frequentemente em zonas de sombra de conectividade celular. Quando o equipamento restabelece o sinal, os pacotes acumulados em memória flash podem ser descarregados fora de ordem cronológica. Se um pacote das 10:00 (1.245,5 horas) chegar após um pacote das 14:00 (1.249,0 horas), um update ingênuo retrocederia o horímetro. O método `MachineryRepository.updateOperatingHoursMonotonically` garante no nível do motor relacional que `m.operatingHours <= :newHours`. Se um pacote antigo chegar atrasado, o PostgreSQL atualiza zero linhas e rejeita o retrocesso.
+
+### 3. Deltas Atômicos sob Extrema Contenção de Virtual Threads
+Para turnos multi-operador concorrentes ou eventos de telemetria simultâneos acumulando frações de hora na mesma máquina, o FarmFlow implementa incrementos atômicos in-place no SQL:
+```sql
+UPDATE machinery
+SET operating_hours = operating_hours + :delta,
+    version = version + 1
+WHERE id = :id;
+```
+- **Teste de Estresse com 100 Virtual Threads:** Validado em [`MachineryHighContentionStressTest.java`](src/test/java/com/farmflow/concurrency/MachineryHighContentionStressTest.java). 100 Virtual Threads (Loom) são liberadas em nanosegundos via `CountDownLatch` disputando o mesmo registro físico.
+- **Exatidão Matemática Estrita:** Valida `finalHours == initialHours + (100 * delta)` e `finalVersion == initialVersion + 100`. Desvio padrão de **0.0000**, com **zero lost updates** e sem locks pessimistas que travem o pool de conexões.
+
+### 4. Locks Consultivos Distribuídos para Liderança Multi-Pod
+Em clusters Kubernetes com múltiplos pods, rotinas agendadas e compensação de sagas expiradas devem rodar em exatamente um nó, sem split-brain:
+```sql
+SELECT pg_try_advisory_xact_lock(:lockKey);
+```
+- **Coordenação sem Infraestrutura Adicional:** Utiliza o lock consultivo transacional nativo de 64 bits do PostgreSQL (`pg_try_advisory_xact_lock`), eliminando a necessidade de clusters externos de Redis ou ZooKeeper.
+- **Tolerância a Falhas com Teste de Caos:** Validado em [`MultiPodDistributedAdvisoryLockChaosTest.java`](src/test/java/com/farmflow/resilience/MultiPodDistributedAdvisoryLockChaosTest.java). 3 pods simulados competem pela liderança. Ao injetar a queda abrupta da conexão física do líder (`socket.close()`), o kernel do PostgreSQL encerra a transação física e libera o lock no socket level. O pod sobrevivente assume a liderança em **< 50 ms**, com **zero locks órfãos** e sem atraso de timeout.
 
 ---
 
@@ -2044,6 +2051,11 @@ Para evitar perda de mensagens em trânsito, Publisher Confirms são ativados em
 | `GET` | `/health/ready` | Readiness Probe (validação do pool de conexões com PostgreSQL) | `200 OK` / `503` |
 | `GET` | `/health/dependencies` | Sonda Diagnóstica (estado detalhado de PostgreSQL e RabbitMQ com estado Degraded) | `200 OK` / `503` |
 
+### Operações Administrativas (`/admin/dlq`) — `[Perfil: ADMIN]`
+| Método | Rota | Objetivo | Sucesso |
+|:---:|:---|:---|:---:|
+| `POST` | `/admin/dlq/replay` | Inspecionar e reenviar mensagens da DLQ para suas filas de origem com limpeza de cabeçalhos | `200 OK` |
+
 ### Exemplos Práticos de Execução via cURL no Campo
 
 ```bash
@@ -2245,32 +2257,35 @@ farmflow-backend/
 │   │   └── resources/
 │   │       ├── application.properties# Virtual Threads e configurações de runtime
 │   │       ├── contracts/            # Contratos JSON Schema v7 para CloudEvents
-│   │       └── db/migration/         # Migrações Flyway V1 a V13
+│   │       └── db/migration/         # Migrações Flyway V1 a V17
 │   └── test/
-│       └── java/com/farmflow/        # 386 testes automatizados em todas as camadas
+│       └── java/com/farmflow/        # 411 testes automatizados em todas as camadas
 ```
 
 ---
 
 ## 23. Estratégia de Testes Automatizados (Testing)
 
-O FarmFlow possui **386 testes automatizados** com 100% de aprovação:
+O FarmFlow possui **411 testes automatizados** com 100% de aprovação:
 
 ```text
 Resultados da Suíte de Testes:
-  Total de Casos de Teste: 386
+  Total de Casos de Teste: 411
   Falhas: 0
   Erros: 0
-  Ignorados: 1 (Fallback condicional de Testcontainers)
+  Ignorados: 5 (Fallback condicional de Testcontainers)
   Status: 100% APROVADO
 ```
 
 ### Categorias Cobertas:
-- **Testes de Arquitetura (ArchUnit):** 11 regras assegurando pureza de camadas, encapsulamento de agregados, ausência de setters públicos e zero dependências web no domínio.
+- **Testes de Arquitetura (ArchUnit):** 13 regras assegurando pureza de camadas, encapsulamento de agregados, ausência de setters públicos, anotação `@PreAuthorize` obrigatória em endpoints e proibição de mutação de estado via notas.
+- **Estresse de Concorrência sob Alta Contenção (100 Virtual Threads):** [`MachineryHighContentionStressTest.java`](src/test/java/com/farmflow/concurrency/MachineryHighContentionStressTest.java) dispara 100 Virtual Threads simultâneas (Loom) via `CountDownLatch` contra incrementos relacionais atômicos, provando exatidão matemática com zero lost updates.
+- **Engenharia de Caos Distribuído Multi-Pod:** [`MultiPodDistributedAdvisoryLockChaosTest.java`](src/test/java/com/farmflow/resilience/MultiPodDistributedAdvisoryLockChaosTest.java) simula 3 pods competindo por `pg_try_advisory_xact_lock`, injetando queda forçada da conexão física do líder com assunção instantânea pelo nó sobrevivente em < 50ms e zero locks órfãos.
+- **Auditoria de Catálogo pg_proc e Isolamento RLS:** [`RlsTenantIsolationIntegrationTest.java`](src/test/java/com/farmflow/rls/RlsTenantIsolationIntegrationTest.java) valida fail-closed cross-tenant, rejeição de acesso direto a partições filhas/default e consulta `pg_proc` no PostgreSQL real exigindo `search_path=public, pg_temp` em 100% das funções `SECURITY DEFINER`.
+- **Propagação de Rastreamento Distribuído (W3C OpenTelemetry):** [`DistributedTracingPropagationIntegrationTest.java`](src/test/java/com/farmflow/event/DistributedTracingPropagationIntegrationTest.java) valida a extração e injeção do header `traceparent` no ciclo HTTP &rarr; Outbox &rarr; AMQP &rarr; Consumidor &rarr; MDC.
 - **Testes de Autenticação e RBAC:** Validação de tokens OIDC, assinaturas RS256, descoberta dinâmica JWKS e mapeamento de papéis.
-- **Testes de Rastreamento Distribuído:** Verificação da propagação de contexto W3C através de HTTP, Outbox, RabbitMQ e Consumidor.
-- **Testes de Concorrência de Outbox:** Simulação com múltiplas threads paralelas demonstrando que workers sob `FOR UPDATE SKIP LOCKED` processam lotes disjuntos sem duplicações.
-- **Testes de Injeção de Falhas e Resiliência:** Validação sob queda do banco, queda do broker, crash pós-commit do consumidor e poison messages.
+- **Testes de Concorrência de Outbox:** Processamento paralelo com 3 workers concorrentes disputando mensagens via `FOR UPDATE SKIP LOCKED` com zero duplicações.
+- **Testes de Injeção de Falhas e Resiliência:** Validação sob queda do banco, queda do broker, crash pós-commit do consumidor e roteamento automático de poison messages para DLQ.
 - **JaCoCo Quality Gate:** Exige $\ge 65\%$ de cobertura de instruções na lógica de negócio (com exclusão de boilerplate de DTOs, configurações e entidades no pom.xml), aprovado no CI com $\sim 71\%$ de instruções, $\sim 73\%$ de linhas totais e $\sim 84\%$ no domínio.
 - **Mutation Testing (PITest):** Avaliação de cobertura de mutação nos Value Objects com meta $\ge 80\%$.
 - **Scanner de Vulnerabilidades (Trivy):** Varredura de segurança automatizada no GitHub Actions bloqueando CVEs críticas e altas.
@@ -2307,7 +2322,7 @@ graph TD
 | **Plataforma Framework** | Spring Boot 4.1.1 | Framework web, injeção de dependências e gerenciamento |
 | **Banco de Dados** | PostgreSQL 17 Alpine | Persistência relacional ACID, particionamento e RLS |
 | **ORM & Mapeamento** | Hibernate 7 / Spring Data JPA | Mapeamento relacional, concorrência otimista e auditoria |
-| **Evolução de Schema** | Flyway 10.x / 11.x | Migrações versionadas idempotentes (V1 a V13) |
+| **Evolução de Schema** | Flyway 10.x / 11.x | Migrações versionadas idempotentes (V1 a V17) |
 | **Broker de Mensageria** | RabbitMQ 3.x Alpine | Malha de eventos, Topic exchanges, retries TTL e DLQ |
 | **Identity Provider (IdP)** | Keycloak 26.1 | Servidor OIDC/OAuth 2.0 com assinatura assimétrica RS256 |
 | **Especificação de Contratos**| CloudEvents v1.0 / JSON Schema | Envelopes padronizados e validação de schema |
@@ -2345,7 +2360,7 @@ docker compose -f docker-compose.microservices.yml --profile all-services up --b
 
 ### 3. Execução dos Testes Automatizados:
 ```bash
-# Executar todos os 386 testes automatizados
+# Executar todos os 411 testes automatizados
 ./mvnw clean test
 
 # Executar suíte completa com validação JaCoCo
@@ -2391,32 +2406,7 @@ docker compose -f docker-compose.microservices.yml --profile all-services up --b
 
 ---
 
-## 30. Revisão Técnica e Production Gate
-
-O projeto foi submetido a uma auditoria técnica adversarial independente cobrindo integridade transacional, tolerância a falhas distribuídas, segurança de endpoints e sanitização de dados:
-
-```text
-==================================================
-           FINAL PRODUCTION GATE REVIEW
-==================================================
-  CRITICAL FINDINGS: 0
-  HIGH FINDINGS:     0
-  MEDIUM FINDINGS:   0
-  LOW FINDINGS:      0
-  STATUS:            APPROVED FOR PRODUCTION
-==================================================
-```
-
-Critérios rigorosamente validados:
-1. **Zero Dual-Write Loss:** Outbox com Publisher Confirms e `FOR UPDATE SKIP LOCKED`.
-2. **Consistência de Saga:** Confirmação positiva de atividades e compensação em falha validadas.
-3. **Defesa em Profundidade:** Keycloak OIDC + `@PreAuthorize` + IDOR 404 + PostgreSQL Row Level Security.
-4. **Excelência em Testes:** 386 testes verdes com JaCoCo gate $\ge 65\%$ de instruções (aprovado no CI com $\sim 71\%$). Score de mutação PITest $\ge 80\%$ nos Value Objects.
-5. **Modernidade de Runtime:** Java 21 Virtual Threads e perfis modulares não-root no Docker.
-
----
-
-## 31. Modelo de Confiabilidade Ponta a Ponta
+## 30. Modelo de Confiabilidade Ponta a Ponta
 
 ```mermaid
 sequenceDiagram
@@ -2452,7 +2442,7 @@ sequenceDiagram
 
 ---
 
-## 32. Decisões Arquiteturais Formalizadas (ADRs)
+## 31. Decisões Arquiteturais Formalizadas (ADRs)
 
 | ADR | Título | Foco Arquitetural |
 |---|---|---|
@@ -2472,10 +2462,14 @@ sequenceDiagram
 | [ADR-014](docs/adr/ADR-014-multi-tenant-isolation-security.md) | Multi-Tenant Security Boundaries | Avaliação declarativa de acesso multi-inquilino, proteção IDOR e RLS |
 | [ADR-015](docs/adr/ADR-015-zero-comment-code-discipline.md) | Zero-Comment Code Discipline | Política estrita de código limpo, autoexplicativo e sem comentários redundantes |
 | [ADR-016](docs/adr/ADR-016-openid-connect-keycloak.md) | OpenID Connect Keycloak Integration | Federação com Keycloak OIDC, validação assimétrica RS256 e RBAC |
+| [ADR-017](docs/adr/ADR-017-rls-fail-closed-defense.md) | Isolamento Multi-Tenancy RLS Fail-Closed | Políticas estritas no kernel do PostgreSQL 17 e separação da role farmflow_app |
+| [ADR-018](docs/adr/ADR-018-telemetry-range-partitioning-brin.md) | Particionamento por Range e Índice BRIN | Particionamento declarativo por mês em telemetria IoT com BRIN e poda de partições |
+| [ADR-019](docs/adr/ADR-019-atomic-delta-counters.md) | Delta Atômico para Horímetro | Eliminação de lost updates em maquinário sem findById e com precisão aritmética |
+| [ADR-020](docs/adr/ADR-020-saga-state-machine-and-timeout.md) | Máquina de Estados de Saga e Timeout | Saga coreografada com auditoria estruturada, outbox events e compensação temporal |
 
 ---
 
-## 33. Cadernos Operacionais de Remediação (SRE Runbooks)
+## 32. Cadernos Operacionais de Remediação (SRE Runbooks)
 
 | Runbook | Gatilho Primário | Ação de Mitigação |
 |---|---|---|
@@ -2486,7 +2480,7 @@ sequenceDiagram
 
 ---
 
-## 34. Objetivos de Nível de Serviço (SLOs) e Error Budgets
+## 33. Objetivos de Nível de Serviço (SLOs) e Error Budgets
 
 | Fluxo / Serviço | Indicador de Nível de Serviço (SLI) | Meta de SLO (30 Dias Móveis) | Error Budget Mensal | Limiar de Alerta de Consumo |
 |---|---|---|---|---|
@@ -2497,7 +2491,7 @@ sequenceDiagram
 
 ---
 
-## 35. Baseline de Infraestrutura e Saúde (Benchmarks HTTP In-Memory)
+## 34. Baseline de Infraestrutura e Saúde (Benchmarks HTTP In-Memory)
 
 Testes de carga empíricos executados com **k6 v0.56.0** contra sondas diagnósticas:
 
@@ -2509,7 +2503,7 @@ Testes de carga empíricos executados com **k6 v0.56.0** contra sondas diagnóst
 
 ---
 
-## 36. Capacidade de Domínio e Validação de Saturação (Benchmarks Transacionais)
+## 35. Capacidade de Domínio e Validação de Saturação (Benchmarks Transacionais)
 
 Benchmarks de carga dirigidos a endpoints de escrita transacional (`POST /activities` e `POST /telemetry/readings`):
 
@@ -2523,7 +2517,7 @@ Benchmarks de carga dirigidos a endpoints de escrita transacional (`POST /activi
 
 ---
 
-## 37. Roadmap de Evoluções Futuras
+## 36. Roadmap de Evoluções Futuras
 
 - [x] **Autenticação & Autorização:** Servidor de recursos Keycloak 26.1 OIDC com validação assimétrica RS256 e descoberta dinâmica via JWKS.
 - [x] **Rastreamento Distribuído OpenTelemetry:** Propagação de contexto W3C `traceparent` de ponta a ponta através de HTTP, Transactional Outbox, RabbitMQ e Consumidores com Jaeger.
@@ -2541,7 +2535,7 @@ Benchmarks de carga dirigidos a endpoints de escrita transacional (`POST /activi
 
 ---
 
-## 38. Autor
+## 37. Autor
 
 **Autor:** Yuri Vieira  
 **GitHub:** [https://github.com/DevYuriVieira](https://github.com/DevYuriVieira)
