@@ -33,21 +33,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String token = resolveToken(request);
 
-        if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
-            String userId = tokenProvider.getUserIdFromToken(token);
-            Optional<User> userOptional = userRepository.findById(userId);
+        try {
+            if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
+                String userId = tokenProvider.getUserIdFromToken(token);
+                Optional<User> userOptional = userRepository.findById(userId);
 
-            if (userOptional.isPresent()) {
-                User user = userOptional.get();
-                var authority = new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase());
-                var auth = new UsernamePasswordAuthenticationToken(user, null, List.of(authority));
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            } else {
-                SecurityContextHolder.clearContext();
+                if (userOptional.isPresent()) {
+                    User user = userOptional.get();
+                    var authority = new SimpleGrantedAuthority("ROLE_" + user.getRole().toUpperCase());
+                    var auth = new UsernamePasswordAuthenticationToken(user, null, List.of(authority));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+
+                    String targetFarmId = user.getFarmId();
+                    if ("ADMIN".equalsIgnoreCase(user.getRole())) {
+                        String headerFarmId = request.getHeader("X-Farm-Id");
+                        if (StringUtils.hasText(headerFarmId)) {
+                            targetFarmId = headerFarmId.trim();
+                        }
+                    }
+                    TenantContext.setTenantId(targetFarmId);
+                } else {
+                    SecurityContextHolder.clearContext();
+                    TenantContext.clear();
+                }
             }
-        }
 
-        filterChain.doFilter(request, response);
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     private String resolveToken(HttpServletRequest request) {
