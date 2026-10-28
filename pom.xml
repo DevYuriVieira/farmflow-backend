@@ -224,7 +224,7 @@
 								<limit>
 									<counter>INSTRUCTION</counter>
 									<value>COVEREDRATIO</value>
-									<minimum>0.65</minimum>
+									<minimum>0.70</minimum>
 								</limit>
 							</limits>
 						</rule>
@@ -285,9 +285,15 @@
 						<configuration>
 							<targetClasses>
 								<param>com.farmflow.domain.vo.*</param>
+								<param>com.farmflow.service.MachineryService</param>
+								<param>com.farmflow.service.SagaTimeoutService</param>
+								<param>com.farmflow.service.OutboxService</param>
 							</targetClasses>
 							<targetTests>
 								<param>com.farmflow.domain.vo.*Test</param>
+								<param>com.farmflow.service.MachineryServiceTest</param>
+								<param>com.farmflow.service.SagaTimeoutServiceTest</param>
+								<param>com.farmflow.service.OutboxServiceTest</param>
 							</targetTests>
 							<mutationThreshold>80</mutationThreshold>
 							<jvmArgs>

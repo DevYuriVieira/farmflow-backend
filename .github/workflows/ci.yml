@@ -87,18 +87,52 @@ jobs:
       - name: Configure Docker Socket Permissions
         run: sudo chmod 666 /var/run/docker.sock || true
 
+      - name: Provision Least-Privilege Application Role (PostgreSQL)
+        run: |
+          docker exec $(docker ps -q -f "ancestor=postgres:17-alpine" | head -n 1) psql -U postgres -d farmflow -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'farmflow_app') THEN CREATE ROLE farmflow_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'farmflow'; END IF; GRANT USAGE ON SCHEMA public TO farmflow_app; END \$\$;"
+
       - name: Run Automated Test Suites
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/farmflow
-          SPRING_DATASOURCE_USERNAME: postgres
-          SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_DATASOURCE_USERNAME: farmflow_app
+          SPRING_DATASOURCE_PASSWORD: farmflow
+          SPRING_FLYWAY_USER: postgres
+          SPRING_FLYWAY_PASSWORD: postgres
+          SPRING_FLYWAY_ENABLED: "true"
           SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
           SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_RABBITMQ_HOST: 127.0.0.1
           SPRING_RABBITMQ_PORT: 5672
           SPRING_RABBITMQ_USERNAME: guest
           SPRING_RABBITMQ_PASSWORD: guest
+          FARMFLOW_SYSTEM_MAINTENANCE_TOKEN: farmflow-internal-system-maintenance-token-v1
         run: ./mvnw -B verify
+
+      - name: Enforce Zero Skipped Tests and Full Execution
+        run: |
+          reports=(target/surefire-reports/TEST-*.xml)
+          if [ ! -f "${reports[0]}" ]; then
+            echo "CRITICAL: No surefire test reports found in target/surefire-reports!"
+            exit 1
+          fi
+          total_tests=$(grep -h -o 'tests="[0-9]*"' target/surefire-reports/TEST-*.xml | tr -dc '0-9\n' | awk '{s+=$1} END {print s+0}')
+          skipped=$(grep -h -o 'skipped="[0-9]*"' target/surefire-reports/TEST-*.xml | tr -dc '0-9\n' | awk '{s+=$1} END {print s+0}')
+          failures=$(grep -h -o 'failures="[0-9]*"' target/surefire-reports/TEST-*.xml | tr -dc '0-9\n' | awk '{s+=$1} END {print s+0}')
+          errors=$(grep -h -o 'errors="[0-9]*"' target/surefire-reports/TEST-*.xml | tr -dc '0-9\n' | awk '{s+=$1} END {print s+0}')
+          echo "Test Execution Summary: Total=$total_tests, Skipped=$skipped, Failures=$failures, Errors=$errors"
+          if [ "$total_tests" -le 0 ]; then
+            echo "CRITICAL: Total executed tests is 0!"
+            exit 1
+          fi
+          if [ "$failures" -ne 0 ] || [ "$errors" -ne 0 ]; then
+            echo "CRITICAL: Failures or errors detected in test suite!"
+            exit 1
+          fi
+          if [ "$skipped" -ne 0 ]; then
+            echo "CRITICAL: Skipped tests detected ($skipped) - zero skips policy violated!"
+            exit 1
+          fi
+          echo "PASS: Zero skipped tests gate satisfied with $total_tests tests executed successfully."
 
       - name: Upload JaCoCo Coverage Report
         if: always()
@@ -109,12 +143,13 @@ jobs:
           retention-days: 14
 
       - name: Security Vulnerability Scan (Trivy)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'table'
           severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
           exit-code: '0'
 
       - name: Annotate Surefire Test Failures
