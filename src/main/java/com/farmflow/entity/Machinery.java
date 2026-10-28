@@ -182,12 +182,17 @@ public class Machinery extends AuditableEntity {
         if (newHours == null || newHours < 0.0) {
             throw new BusinessException("Operating hours cannot be negative.");
         }
-        if (this.operatingHours != null && newHours < this.operatingHours) {
-            throw new BusinessException("Operating hours cannot decrease.");
+        com.farmflow.domain.vo.MachineHours vo = com.farmflow.domain.vo.MachineHours.of(newHours);
+        if (this.operatingHours != null) {
+            try {
+                vo.validateMonotonicAdvanceFrom(com.farmflow.domain.vo.MachineHours.of(this.operatingHours));
+            } catch (IllegalStateException ise) {
+                throw new BusinessException("Operating hours cannot decrease.");
+            }
         }
         Double previousHours = this.operatingHours;
-        this.operatingHours = newHours;
-        this.domainEvents.add(new MachineryOperatingHoursUpdatedEvent(this, previousHours, newHours));
+        this.operatingHours = vo.value();
+        this.domainEvents.add(new MachineryOperatingHoursUpdatedEvent(this, previousHours, this.operatingHours));
     }
 
     public void updateFuelLevel(Double newFuelPercent) {

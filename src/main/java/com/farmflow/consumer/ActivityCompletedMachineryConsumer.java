@@ -60,21 +60,30 @@ public class ActivityCompletedMachineryConsumer {
                 return;
             }
 
-            boolean processed = deduplicationService.executeIfNew(
-                    CONSUMER_NAME,
-                    messageId,
-                    "MachineryActivityCompleted",
-                    () -> applyBusinessEffect(payload, messageId)
-            );
-
-            if (!processed) {
-                farmFlowMetrics.incrementConsumerDuplicate("MachineryActivityCompleted");
-                log.info("Machinery activity completed event duplicate discarded: messageId={}", messageId);
-                return;
+            String tenantId = extractTenantId(payload);
+            if (tenantId != null && !tenantId.isBlank()) {
+                com.farmflow.config.TenantContext.setTenantId(tenantId);
             }
 
-            farmFlowMetrics.incrementConsumerProcessed("MachineryActivityCompleted");
-            log.info("Successfully processed machinery activity completed event: messageId={}", messageId);
+            try {
+                boolean processed = deduplicationService.executeIfNew(
+                        CONSUMER_NAME,
+                        messageId,
+                        "MachineryActivityCompleted",
+                        () -> applyBusinessEffect(payload, messageId)
+                );
+
+                if (!processed) {
+                    farmFlowMetrics.incrementConsumerDuplicate("MachineryActivityCompleted");
+                    log.info("Machinery activity completed event duplicate discarded: messageId={}", messageId);
+                    return;
+                }
+
+                farmFlowMetrics.incrementConsumerProcessed("MachineryActivityCompleted");
+                log.info("Successfully processed machinery activity completed event: messageId={}", messageId);
+            } finally {
+                com.farmflow.config.TenantContext.clear();
+            }
         } catch (Exception e) {
             log.error("Error processing machinery activity completed message {}: {}", messageId, e.getMessage(), e);
             farmFlowMetrics.incrementConsumerFailed("MachineryActivityCompleted");
@@ -89,30 +98,62 @@ public class ActivityCompletedMachineryConsumer {
         }
     }
 
+    private String extractTenantId(String payload) {
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            JsonNode dataNode = root.hasNonNull("data") ? root.get("data") : root;
+            if (dataNode.hasNonNull("farmId")) {
+                return dataNode.get("farmId").asText();
+            }
+            if (root.hasNonNull("tenantId")) {
+                return root.get("tenantId").asText();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     private void applyBusinessEffect(String payload, String messageId) {
         try {
             JsonNode root = objectMapper.readTree(payload);
             JsonNode dataNode = root.hasNonNull("data") ? root.get("data") : root;
             JsonNode activityNode = dataNode.hasNonNull("activity") ? dataNode.get("activity") : dataNode;
 
+            String farmId = dataNode.hasNonNull("farmId") ? dataNode.get("farmId").asText() :
+                    (activityNode.hasNonNull("farmId") ? activityNode.get("farmId").asText() :
+                            (root.hasNonNull("tenantId") ? root.get("tenantId").asText() : null));
+
             String machineryId = dataNode.hasNonNull("machineryId") ? dataNode.get("machineryId").asText() :
                     (activityNode.hasNonNull("machineryId") ? activityNode.get("machineryId").asText() : null);
 
-            double hoursUsed = dataNode.hasNonNull("hoursUsed") ? dataNode.get("hoursUsed").asDouble() :
-                    (activityNode.hasNonNull("hoursUsed") ? activityNode.get("hoursUsed").asDouble() : 0.0);
+            JsonNode hoursNode = dataNode.hasNonNull("hoursUsed") ? dataNode.get("hoursUsed") :
+                    (activityNode.hasNonNull("hoursUsed") ? activityNode.get("hoursUsed") : null);
 
-            if (machineryId == null || machineryId.isBlank() || hoursUsed <= 0.0) {
-                log.debug("No machinery hours to increment for activity event messageId={}", messageId);
+            if (machineryId == null || machineryId.isBlank()) {
+                log.debug("No machinery assigned for activity completed event messageId={}", messageId);
                 return;
             }
 
-            machineryRepository.findById(machineryId).ifPresent(machinery -> {
-                double currentHours = machinery.getOperatingHours() != null ? machinery.getOperatingHours() : 0.0;
-                double newHours = currentHours + hoursUsed;
-                machineryRepository.updateOperatingHoursMonotonically(machineryId, newHours, Instant.now());
-                log.info("Machinery {} operating hours updated monotonically from {} to {} for messageId={}",
-                        machineryId, currentHours, newHours, messageId);
-            });
+            if (farmId == null || farmId.isBlank()) {
+                throw new IllegalArgumentException("Missing mandatory farmId in activity completed payload: messageId=" + messageId);
+            }
+
+            if (hoursNode == null || !hoursNode.isNumber()) {
+                throw new IllegalArgumentException("Non-numeric or missing hoursUsed in activity completed payload: messageId=" + messageId);
+            }
+
+            double hoursUsed = hoursNode.asDouble();
+            if (Double.isNaN(hoursUsed) || Double.isInfinite(hoursUsed) || hoursUsed <= 0.0 || hoursUsed > 24.0) {
+                throw new IllegalArgumentException("Invalid hoursUsed value " + hoursUsed + " in messageId=" + messageId);
+            }
+
+            int rowsUpdated = machineryRepository.incrementOperatingHoursAtomic(machineryId, farmId, hoursUsed, Instant.now());
+            if (rowsUpdated == 0) {
+                throw new IllegalArgumentException("Machinery not found or tenant mismatch: id=" + machineryId + ", farmId=" + farmId);
+            }
+
+            log.info("Machinery {} operating hours atomically incremented by {} for messageId={}",
+                    machineryId, hoursUsed, messageId);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {

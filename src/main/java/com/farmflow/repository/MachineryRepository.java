@@ -30,5 +30,20 @@ public interface MachineryRepository extends JpaRepository<Machinery, String> {
             @org.springframework.data.repository.query.Param("newHours") Double newHours,
             @org.springframework.data.repository.query.Param("now") java.time.Instant now
     );
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("""
+        UPDATE Machinery m
+        SET m.operatingHours = ROUND(COALESCE(m.operatingHours, 0.0) + :delta, 2),
+            m.version = m.version + 1,
+            m.updatedAt = :now
+        WHERE m.id = :id AND m.farmId = :farmId AND :delta > 0.0
+        """)
+    int incrementOperatingHoursAtomic(
+            @org.springframework.data.repository.query.Param("id") String id,
+            @org.springframework.data.repository.query.Param("farmId") String farmId,
+            @org.springframework.data.repository.query.Param("delta") Double delta,
+            @org.springframework.data.repository.query.Param("now") java.time.Instant now
+    );
 }
 

@@ -382,4 +382,67 @@ class MachineryDomainTest {
         assertNotNull(machinery.getMachineHours());
         assertEquals(350.5, machinery.getMachineHours().value());
     }
+
+    @Test
+    void shouldUpdateOperatingHoursMonotonicallyAndEmitEvent() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator")
+                .model("M1")
+                .type("TRACTOR")
+                .operatingHours(100.0)
+                .build();
+
+        machinery.updateOperatingHours(125.75);
+
+        assertEquals(125.75, machinery.getOperatingHours());
+        assertEquals(125.75, machinery.getMachineHours().value());
+
+        List<Object> events = machinery.pullDomainEvents();
+        assertEquals(1, events.size());
+        assertInstanceOf(MachineryOperatingHoursUpdatedEvent.class, events.get(0));
+        MachineryOperatingHoursUpdatedEvent event = (MachineryOperatingHoursUpdatedEvent) events.get(0);
+        assertEquals(100.0, event.previousHours());
+        assertEquals(125.75, event.newHours());
+    }
+
+    @Test
+    void shouldRejectDecreasingOperatingHours() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator")
+                .model("M1")
+                .type("TRACTOR")
+                .operatingHours(100.0)
+                .build();
+
+        assertThrows(BusinessException.class, () -> machinery.updateOperatingHours(95.0));
+    }
+
+    @Test
+    void shouldRejectNegativeOperatingHours() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator")
+                .model("M1")
+                .type("TRACTOR")
+                .operatingHours(50.0)
+                .build();
+
+        assertThrows(BusinessException.class, () -> machinery.updateOperatingHours(-1.0));
+    }
+
+    @Test
+    void shouldEnforceTwoDecimalsPrecisionRoundingOnOperatingHours() {
+        Machinery machinery = Machinery.builder()
+                .farmId("farm-001")
+                .name("Trator")
+                .model("M1")
+                .type("TRACTOR")
+                .operatingHours(10.0)
+                .build();
+
+        machinery.updateOperatingHours(10.456);
+        assertEquals(10.46, machinery.getOperatingHours());
+    }
 }

@@ -105,12 +105,12 @@ class ActivityCompletedMachineryConsumerTest {
                 any(Runnable.class)
         );
 
-        when(machineryRepository.findById("mach-jd-8000")).thenReturn(Optional.of(machinery));
+        when(machineryRepository.incrementOperatingHoursAtomic(eq("mach-jd-8000"), eq("farm-uberaba"), eq(6.5), any(Instant.class)))
+                .thenReturn(1);
 
         sut.handleActivityCompleted(message);
 
-        verify(machineryRepository).findById("mach-jd-8000");
-        verify(machineryRepository).updateOperatingHoursMonotonically(eq("mach-jd-8000"), eq(126.5), any(Instant.class));
+        verify(machineryRepository).incrementOperatingHoursAtomic(eq("mach-jd-8000"), eq("farm-uberaba"), eq(6.5), any(Instant.class));
         verify(farmFlowMetrics).incrementConsumerProcessed("MachineryActivityCompleted");
         verifyNoInteractions(retryRouter);
     }
@@ -204,7 +204,7 @@ class ActivityCompletedMachineryConsumerTest {
     @Test
     @DisplayName("deve rotear falha transitoria para fila de retry")
     void shouldRouteFailureViaRetryRouterOnTransientException() {
-        String payload = "{\"data\": {\"machineryId\": \"mach-error\", \"hoursUsed\": 3.0}}";
+        String payload = "{\"data\": {\"farmId\": \"farm-1\", \"machineryId\": \"mach-error\", \"hoursUsed\": 3.0}}";
         MessageProperties props = new MessageProperties();
         props.setMessageId("transient-mach-msg");
         Message message = new Message(payload.getBytes(StandardCharsets.UTF_8), props);
@@ -220,7 +220,8 @@ class ActivityCompletedMachineryConsumerTest {
                 any(Runnable.class)
         );
 
-        when(machineryRepository.findById("mach-error")).thenThrow(new RuntimeException("Database timeout"));
+        when(machineryRepository.incrementOperatingHoursAtomic(eq("mach-error"), eq("farm-1"), eq(3.0), any(Instant.class)))
+                .thenThrow(new RuntimeException("Database timeout"));
 
         sut.handleActivityCompleted(message);
 

@@ -147,4 +147,58 @@ class MachineryConcurrencyTest extends AbstractIntegrationTest {
         assertNotNull(finalState.getVersion());
         assertTrue(finalState.getVersion() >= 1);
     }
+
+    @Test
+    @DisplayName("deve acumular horas operacionais com precisao absoluta sob concorrencia massiva sem lost update")
+    void shouldAccuratelyAccumulateOperatingHoursUnderConcurrentAtomicIncrements() throws Exception {
+        Machinery machine = Machinery.builder()
+                .farmId("farm-atomic-test")
+                .name("Trator Massey Ferguson")
+                .model("MF 8700 S")
+                .type("TRACTOR")
+                .operatingHours(100.0)
+                .status(MachineryStatus.OPERATIONAL)
+                .build();
+        Machinery saved = machineryRepository.saveAndFlush(machine);
+        String machineId = saved.getId();
+
+        int threadCount = 10;
+        double incrementPerHour = 2.5;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    txTemplate.execute(status ->
+                            machineryRepository.incrementOperatingHoursAtomic(
+                                    machineId,
+                                    "farm-atomic-test",
+                                    incrementPerHour,
+                                    Instant.now()
+                            )
+                    );
+                } catch (Exception e) {
+                    fail("Incremento atômico falhou: " + e.getMessage());
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        boolean completed = doneLatch.await(10, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertTrue(completed);
+
+        Machinery finalState = machineryRepository.findById(machineId).orElseThrow();
+        double expectedHours = 100.0 + (threadCount * incrementPerHour);
+        assertEquals(expectedHours, finalState.getOperatingHours(), 0.001);
+    }
 }
