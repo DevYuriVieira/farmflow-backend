@@ -18,7 +18,11 @@ public class FarmFlowMetrics {
     private final Timer outboxPublishTimer;
     private final MeterRegistry meterRegistry;
 
-    public FarmFlowMetrics(MeterRegistry meterRegistry, OutboxService outboxService) {
+    public FarmFlowMetrics(
+            MeterRegistry meterRegistry,
+            OutboxService outboxService,
+            org.springframework.beans.factory.ObjectProvider<com.farmflow.service.AdminDlqService> adminDlqServiceProvider
+    ) {
         this.meterRegistry = meterRegistry;
 
         this.outboxPublishedCounter = Counter.builder("farmflow.outbox.messages.published")
@@ -45,6 +49,12 @@ public class FarmFlowMetrics {
         Gauge.builder("farmflow.outbox.dead.count", outboxService, OutboxService::getDeadLetterCount)
                 .description("Number of dead outbox messages that exceeded max attempts")
                 .register(meterRegistry);
+
+        adminDlqServiceProvider.ifAvailable(adminDlqService ->
+                Gauge.builder("farmflow.rabbitmq.dlq.message.count", adminDlqService, com.farmflow.service.AdminDlqService::getDlqMessageCount)
+                        .description("Total number of dead letter messages currently waiting in RabbitMQ DLQ")
+                        .register(meterRegistry)
+        );
     }
 
     public void incrementOutboxPublished() {
@@ -102,5 +112,13 @@ public class FarmFlowMetrics {
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry)
                 .record(nanos, TimeUnit.NANOSECONDS);
+    }
+
+    public void incrementSagaTimeout(String sagaName) {
+        Counter.builder("farmflow.saga.timeout.total")
+                .tag("saga_name", sagaName != null ? sagaName : "unknown")
+                .description("Total number of distributed saga timeout events triggering automatic compensation")
+                .register(meterRegistry)
+                .increment();
     }
 }

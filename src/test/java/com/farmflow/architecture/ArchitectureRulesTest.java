@@ -99,4 +99,49 @@ public class ArchitectureRulesTest {
         noClasses()
             .that().resideInAPackage("..domain..")
             .should().dependOnClassesThat().resideInAPackage("org.springframework.web..");
+
+    @ArchTest
+    static final ArchRule controllerEndpointsShouldBeProtectedWithPreAuthorize =
+        classes()
+            .that().resideInAPackage("..controller..")
+            .and().areAnnotatedWith(RestController.class)
+            .and().doNotHaveSimpleName("AuthController")
+            .and().doNotHaveSimpleName("HealthProbeController")
+            .should(new ArchCondition<JavaClass>("have @PreAuthorize on all public endpoint methods") {
+                @Override
+                public void check(JavaClass item, ConditionEvents events) {
+                    boolean classHasPreAuth = item.isAnnotatedWith(org.springframework.security.access.prepost.PreAuthorize.class);
+                    if (classHasPreAuth) {
+                        return;
+                    }
+                    for (JavaMethod method : item.getAllMethods()) {
+                        if (method.getModifiers().contains(JavaModifier.PUBLIC)
+                                && (method.isAnnotatedWith(org.springframework.web.bind.annotation.GetMapping.class)
+                                || method.isAnnotatedWith(org.springframework.web.bind.annotation.PostMapping.class)
+                                || method.isAnnotatedWith(org.springframework.web.bind.annotation.PutMapping.class)
+                                || method.isAnnotatedWith(org.springframework.web.bind.annotation.PatchMapping.class)
+                                || method.isAnnotatedWith(org.springframework.web.bind.annotation.DeleteMapping.class)
+                                || method.isAnnotatedWith(org.springframework.web.bind.annotation.RequestMapping.class))) {
+                            if (!method.isAnnotatedWith(org.springframework.security.access.prepost.PreAuthorize.class)) {
+                                events.add(SimpleConditionEvent.violated(method, "Method " + method.getFullName() + " lacks @PreAuthorize annotation"));
+                            }
+                        }
+                    }
+                }
+            });
+
+    @ArchTest
+    static final ArchRule domainStateShouldNotBeManagedThroughNotesConcat =
+        classes()
+            .that().resideInAPackage("..entity..")
+            .should(new ArchCondition<JavaClass>("not expose note concatenation for state changes") {
+                @Override
+                public void check(JavaClass item, ConditionEvents events) {
+                    for (JavaMethod method : item.getAllMethods()) {
+                        if (method.getName().toLowerCase().contains("appendnote") || method.getName().toLowerCase().contains("concatnote")) {
+                            events.add(SimpleConditionEvent.violated(method, "Domain aggregate " + item.getName() + " exposes note-based state mutator: " + method.getName()));
+                        }
+                    }
+                }
+            });
 }

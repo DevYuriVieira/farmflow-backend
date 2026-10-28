@@ -1,0 +1,48 @@
+groups:
+  - name: farmflow-messaging-and-resilience-alerts
+    rules:
+      - alert: FarmflowOutboxLagCritical
+        expr: farmflow_outbox_oldest_message_age_seconds > 30
+        for: 2m
+        labels:
+          severity: critical
+          service: farmflow-backend
+          component: outbox-relay
+        annotations:
+          summary: "Outbox Relay Lag is Critical (> 30s)"
+          description: "The oldest unprocessed Outbox message has been waiting for {{ $value }} seconds. Events are not reaching RabbitMQ in time."
+          runbook_url: "docs/runbooks/OUTBOX_LAG_RECOVERY.md"
+
+      - alert: FarmflowDlqPoisonMessageDetected
+        expr: farmflow_rabbitmq_dlq_message_count > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: farmflow-backend
+          component: rabbitmq
+        annotations:
+          summary: "Dead Letter Queue contains poison or rejected messages"
+          description: "There are currently {{ $value }} dead letter messages in farmflow.events.dlq requiring administrative inspection."
+          runbook_url: "docs/runbooks/DLQ_REPLAY_PROCEDURES.md"
+
+      - alert: FarmflowSagaTimeoutSpike
+        expr: rate(farmflow_saga_timeout_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: farmflow-backend
+          component: distributed-saga
+        annotations:
+          summary: "High rate of Saga Timeout compensations"
+          description: "Distributed sagas are timing out at {{ $value }} compensations/sec, indicating degraded downstream services."
+
+      - alert: FarmflowTelemetryDefaultPartitionAnomaly
+        expr: farmflow_telemetry_default_partition_count > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: farmflow-backend
+          component: database-partitioning
+        annotations:
+          summary: "IoT Telemetry Default Partition receives out-of-range timestamps"
+          description: "Sensors are transmitting telemetry readings falling into telemetry_readings_default. Check sensor clock calibration and future partition provisioning."
