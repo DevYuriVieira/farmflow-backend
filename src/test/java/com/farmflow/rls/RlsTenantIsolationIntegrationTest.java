@@ -229,7 +229,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
                     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
                     version BIGINT DEFAULT 0,
-                    farm_id VARCHAR(36) NOT NULL,
+                    farm_id VARCHAR(255) NOT NULL,
                     plantation_id VARCHAR(36),
                     sensor_id VARCHAR(100) NOT NULL,
                     reading_type VARCHAR(50) NOT NULL,
@@ -702,8 +702,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Partition RLS: Isolamento estrito de dados entre tenants na tabela particionada telemetry_readings")
     void shouldEnforceRlsOnPartitionedTelemetryReadings() {
-        String tenantA = "farm-telem-a-" + UUID.randomUUID();
-        String tenantB = "farm-telem-b-" + UUID.randomUUID();
+        String tenantA = UUID.randomUUID().toString();
+        String tenantB = UUID.randomUUID().toString();
 
         transactionTemplate.execute(status -> {
             enforceNonSuperuserRole();
@@ -799,7 +799,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         // 1. Valid access via partitioned root table succeeds
         transactionTemplate.execute(status -> {
             enforceNonSuperuserRole();
-            setTenantSession("farm-telem-child-" + UUID.randomUUID());
+            setTenantSession(UUID.randomUUID().toString());
 
             Integer count = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM telemetry_readings WHERE recorded_at >= '2026-10-01 00:00:00+00' AND recorded_at < '2026-11-01 00:00:00+00'",
