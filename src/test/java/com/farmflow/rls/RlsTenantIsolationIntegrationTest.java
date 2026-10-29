@@ -162,6 +162,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
                 REVOKE ALL ON telemetry_readings_2026_10 FROM PUBLIC, farmflow_app;
                 REVOKE ALL ON telemetry_readings_default FROM PUBLIC, farmflow_app;
+                GRANT INSERT ON telemetry_readings_2026_10 TO farmflow_app;
+                GRANT INSERT ON telemetry_readings_default TO farmflow_app;
                 GRANT SELECT, INSERT, UPDATE, DELETE ON telemetry_readings TO farmflow_app;
 
                 DROP POLICY IF EXISTS telemetry_tenant_isolation ON telemetry_readings;
@@ -236,6 +238,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', p_name);
                     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', p_name);
                     EXECUTE format('REVOKE ALL ON %I FROM PUBLIC, farmflow_app', p_name);
+                    EXECUTE format('GRANT INSERT ON %I TO farmflow_app', p_name);
                 END IF;
                 RETURN true;
             END;
@@ -346,6 +349,15 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 }
             }
         }
+        try {
+            jdbcTemplate.execute("""
+                INSERT INTO system_maintenance_auth (id, token_hash, updated_at)
+                VALUES (1, encode(sha256('farmflow-internal-system-maintenance-token-v1'::bytea), 'hex'), now())
+                ON CONFLICT (id) DO UPDATE
+                SET token_hash = encode(sha256('farmflow-internal-system-maintenance-token-v1'::bytea), 'hex'), updated_at = now()
+            """);
+        } catch (Exception ignored) {
+        }
     }
 
     @Test
@@ -371,8 +383,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             enforceNonSuperuserRole();
             setTenantSession(tenantA);
             jdbcTemplate.update("""
-                INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop_type, area_hectares, status)
-                VALUES (?, NOW(), NOW(), 0, ?, 'Talhão A', 'SOYBEAN', 50.0, 'ACTIVE')
+                INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop, area_hectares, status, planting_date, harvest_estimate_date)
+                VALUES (?, NOW(), NOW(), 0, ?, 'Talhão A', 'SOYBEAN', 50.0, 'PLANTED', '2026-10-01', '2027-02-01')
             """, UUID.randomUUID().toString(), tenantA);
             return null;
         });
@@ -381,8 +393,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             enforceNonSuperuserRole();
             setTenantSession(tenantB);
             jdbcTemplate.update("""
-                INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop_type, area_hectares, status)
-                VALUES (?, NOW(), NOW(), 0, ?, 'Talhão B', 'CORN', 75.0, 'ACTIVE')
+                INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop, area_hectares, status, planting_date, harvest_estimate_date)
+                VALUES (?, NOW(), NOW(), 0, ?, 'Talhão B', 'CORN', 75.0, 'PLANTED', '2026-10-01', '2027-02-01')
             """, UUID.randomUUID().toString(), tenantB);
             return null;
         });
@@ -429,8 +441,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             setTenantSession(tenantA);
             assertThrows(DataAccessException.class, () -> {
                 jdbcTemplate.update("""
-                    INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop_type, area_hectares, status)
-                    VALUES (?, NOW(), NOW(), 0, ?, 'Talhão Invasor', 'SOYBEAN', 25.0, 'ACTIVE')
+                    INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop, area_hectares, status, planting_date, harvest_estimate_date)
+                    VALUES (?, NOW(), NOW(), 0, ?, 'Talhão Invasor', 'SOYBEAN', 25.0, 'PLANTED', '2026-10-01', '2027-02-01')
                 """, UUID.randomUUID().toString(), tenantB);
             }, "PostgreSQL RLS WITH CHECK policy violation expected on cross-tenant insert");
             return null;
@@ -456,8 +468,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
                         // Insert tenant-specific plantation under virtual thread
                         jdbcTemplate.update("""
-                            INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop_type, area_hectares, status)
-                            VALUES (?, NOW(), NOW(), 0, ?, 'Talhão Concorrente', 'SOYBEAN', 10.0, 'ACTIVE')
+                            INSERT INTO plantations (id, created_at, updated_at, version, farm_id, name, crop, area_hectares, status, planting_date, harvest_estimate_date)
+                            VALUES (?, NOW(), NOW(), 0, ?, 'Talhão Concorrente', 'SOYBEAN', 10.0, 'PLANTED', '2026-10-01', '2027-02-01')
                         """, UUID.randomUUID().toString(), tenantId);
 
                         String currentConfig = jdbcTemplate.queryForObject(
@@ -502,9 +514,9 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             enforceNonSuperuserRole();
             setTenantSession(tenantA);
             jdbcTemplate.update("""
-                INSERT INTO activities (id, created_at, updated_at, version, farm_id, title, type, priority, status, completed)
-                VALUES (?, NOW(), NOW(), 0, ?, 'Atividade A', 'PLANTING', 'HIGH', 'IN_PROGRESS', false)
-            """, UUID.randomUUID().toString(), tenantA);
+                INSERT INTO activities (id, created_at, updated_at, version, plantation_id, farm_id, title, type, date, priority, status, completed)
+                VALUES (?, NOW(), NOW(), 0, ?, ?, 'Atividade A', 'PLANTING', '2026-10-28', 'HIGH', 'IN_PROGRESS', false)
+            """, UUID.randomUUID().toString(), UUID.randomUUID().toString(), tenantA);
             return null;
         });
 
@@ -534,9 +546,9 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             enforceNonSuperuserRole();
             setTenantSession(tenantA);
             jdbcTemplate.update("""
-                INSERT INTO activities (id, created_at, updated_at, version, farm_id, title, type, priority, status, completed)
-                VALUES (?, NOW(), NOW(), 0, ?, 'Atividade Valid Token', 'PLANTING', 'HIGH', 'IN_PROGRESS', false)
-            """, UUID.randomUUID().toString(), tenantA);
+                INSERT INTO activities (id, created_at, updated_at, version, plantation_id, farm_id, title, type, date, priority, status, completed)
+                VALUES (?, NOW(), NOW(), 0, ?, ?, 'Atividade Valid Token', 'PLANTING', 'HIGH', 'IN_PROGRESS', false)
+            """, UUID.randomUUID().toString(), UUID.randomUUID().toString(), tenantA);
             return null;
         });
 
@@ -613,32 +625,43 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     void shouldAllowTokenRotationByAdminAndRejectApplicationRole() {
         String newSecret = "new-rotated-super-strong-token-32chars";
 
-        transactionTemplate.execute(status -> {
-            // 1. As admin (current session user), rotation succeeds
-            Boolean rotated = jdbcTemplate.queryForObject(
-                    "SELECT rotate_system_maintenance_token(?)", Boolean.class, newSecret);
-            assertEquals(Boolean.TRUE, rotated);
+        try {
+            transactionTemplate.execute(status -> {
+                // 1. As admin (current session user), rotation succeeds
+                Boolean rotated = jdbcTemplate.queryForObject(
+                        "SELECT rotate_system_maintenance_token(?)", Boolean.class, newSecret);
+                assertEquals(Boolean.TRUE, rotated);
 
-            // Verify old default token is no longer accepted
-            Boolean oldAccepted = jdbcTemplate.queryForObject(
-                    "SELECT verify_system_maintenance_token('farmflow-internal-system-maintenance-token-v1')", Boolean.class);
-            assertEquals(Boolean.FALSE, oldAccepted, "Old default token must be rejected after rotation");
+                // Verify old default token is no longer accepted
+                Boolean oldAccepted = jdbcTemplate.queryForObject(
+                        "SELECT verify_system_maintenance_token('farmflow-internal-system-maintenance-token-v1')", Boolean.class);
+                assertEquals(Boolean.FALSE, oldAccepted, "Old default token must be rejected after rotation");
 
-            // Verify new rotated token is accepted
-            Boolean newAccepted = jdbcTemplate.queryForObject(
-                    "SELECT verify_system_maintenance_token(?)", Boolean.class, newSecret);
-            assertEquals(Boolean.TRUE, newAccepted, "Rotated token must be accepted");
+                // Verify new rotated token is accepted
+                Boolean newAccepted = jdbcTemplate.queryForObject(
+                        "SELECT verify_system_maintenance_token(?)", Boolean.class, newSecret);
+                assertEquals(Boolean.TRUE, newAccepted, "Rotated token must be accepted");
 
-            // 2. As application role, calling rotate_system_maintenance_token is strictly denied
-            enforceNonSuperuserRole();
-            assertThrows(DataAccessException.class, () -> {
-                jdbcTemplate.execute("SELECT rotate_system_maintenance_token('hacker-attempt-token-32chars-long')");
-            }, "Application role farmflow_app must be denied access to rotate_system_maintenance_token");
+                // 2. As application role, calling rotate_system_maintenance_token is strictly denied
+                enforceNonSuperuserRole();
+                assertThrows(DataAccessException.class, () -> {
+                    jdbcTemplate.execute("SELECT rotate_system_maintenance_token('hacker-attempt-token-32chars-long')");
+                }, "Application role farmflow_app must be denied access to rotate_system_maintenance_token");
 
-            // Rollback rotation so other tests retain the test fixture token
-            status.setRollbackOnly();
-            return null;
-        });
+                // Rollback rotation so other tests retain the test fixture token
+                status.setRollbackOnly();
+                return null;
+            });
+        } finally {
+            try {
+                jdbcTemplate.execute("""
+                    UPDATE system_maintenance_auth
+                    SET token_hash = encode(sha256('farmflow-internal-system-maintenance-token-v1'::bytea), 'hex'), updated_at = now()
+                    WHERE id = 1
+                """);
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @Test
@@ -750,17 +773,10 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Partition Least Privilege: farmflow_app não pode acessar partição filha diretamente sem passar pela tabela raiz")
     void shouldDenyDirectAccessToTelemetryChildPartitionsForApplicationRole() {
+        // 1. Valid access via partitioned root table succeeds
         transactionTemplate.execute(status -> {
             enforceNonSuperuserRole();
             setTenantSession("farm-telem-child-" + UUID.randomUUID());
-
-            assertThrows(DataAccessException.class, () -> {
-                jdbcTemplate.execute("SELECT * FROM telemetry_readings_2026_10 LIMIT 1");
-            }, "Direct access to child partition must be denied to enforce access via partitioned root table");
-
-            assertThrows(DataAccessException.class, () -> {
-                jdbcTemplate.execute("SELECT * FROM telemetry_readings_default LIMIT 1");
-            }, "Direct access to default child partition must also be denied to enforce access via partitioned root table");
 
             Integer count = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM telemetry_readings WHERE recorded_at >= '2026-10-01 00:00:00+00' AND recorded_at < '2026-11-01 00:00:00+00'",
@@ -769,11 +785,32 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             assertNotNull(count);
             return null;
         });
+
+        // 2. Direct access to child partition is denied
+        transactionTemplate.execute(status -> {
+            enforceNonSuperuserRole();
+            assertThrows(DataAccessException.class, () -> {
+                jdbcTemplate.execute("SELECT * FROM telemetry_readings_2026_10 LIMIT 1");
+            }, "Direct access to child partition must be denied to enforce access via partitioned root table");
+            status.setRollbackOnly();
+            return null;
+        });
+
+        // 3. Direct access to default child partition is denied
+        transactionTemplate.execute(status -> {
+            enforceNonSuperuserRole();
+            assertThrows(DataAccessException.class, () -> {
+                jdbcTemplate.execute("SELECT * FROM telemetry_readings_default LIMIT 1");
+            }, "Direct access to default child partition must also be denied to enforce access via partitioned root table");
+            status.setRollbackOnly();
+            return null;
+        });
     }
 
     @Test
     @DisplayName("Security & Audit: Elevação de contexto é auditada em system_maintenance_audit_trail (inacessível para farmflow_app)")
     void shouldAuditMaintenanceContextElevationAndDenyDirectAccessToAuditTrail() {
+        // 1. Elevate and disable maintenance context as farmflow_app (commits audit log)
         transactionTemplate.execute(status -> {
             enforceNonSuperuserRole();
             Boolean elevated = jdbcTemplate.queryForObject(
@@ -787,14 +824,19 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                     Boolean.class
             );
             assertEquals(Boolean.TRUE, cleared);
-
-            assertThrows(DataAccessException.class, () -> {
-                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM system_maintenance_audit_trail", Integer.class);
-            });
-
             return null;
         });
 
+        // 2. Application role cannot directly read the audit trail
+        transactionTemplate.execute(status -> {
+            enforceNonSuperuserRole();
+            assertThrows(DataAccessException.class, () -> {
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM system_maintenance_audit_trail", Integer.class);
+            });
+            return null;
+        });
+
+        // 3. Admin verifies audit entry was persisted
         transactionTemplate.execute(status -> {
             Integer auditCount = jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM system_maintenance_audit_trail WHERE action = 'ELEVATE_MAINTENANCE_CONTEXT' AND success = true",
