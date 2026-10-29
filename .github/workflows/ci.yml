@@ -156,11 +156,13 @@ jobs:
                   for fl in tc.findall('failure'):
                       name = tc.attrib.get('name', 'unknown')
                       cls = tc.attrib.get('classname', 'unknown')
-                      msg = fl.attrib.get('message', '') or (fl.text or '').strip()[:200]
+                      raw_msg = fl.attrib.get('message', '') or (fl.text or '').strip()[:500]
+                      msg = raw_msg.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
                       print(f'::error title={cls}.{name}::{msg}')
                   for er in tc.findall('error'):
                       name = tc.attrib.get('name', 'unknown')
                       cls = tc.attrib.get('classname', 'unknown')
-                      msg = er.attrib.get('message', '') or (er.text or '').strip()[:200]
+                      raw_msg = er.attrib.get('message', '') or (er.text or '').strip()[:500]
+                      msg = raw_msg.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
                       print(f'::error title={cls}.{name}::{msg}')
           "

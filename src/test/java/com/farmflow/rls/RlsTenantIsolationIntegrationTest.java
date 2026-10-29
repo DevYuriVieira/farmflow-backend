@@ -47,6 +47,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     private static volatile boolean rlsInitialized = false;
 
     private void initRlsInfrastructure() {
+        // 1. Application role with least privilege
         jdbcTemplate.execute("""
             DO $$
             BEGIN
@@ -61,39 +62,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             END $$;
         """);
 
+        // 2. Auth tables and cryptographic verification functions
         jdbcTemplate.execute("""
-            ALTER TABLE plantations ENABLE ROW LEVEL SECURITY;
-            ALTER TABLE plantations FORCE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS plantations_tenant_isolation ON plantations;
-            CREATE POLICY plantations_tenant_isolation ON plantations
-                FOR ALL
-                USING (
-                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
-                    OR current_setting('app.system_bypass_rls', true) = 'true'
-                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
-                )
-                WITH CHECK (
-                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
-                    OR current_setting('app.system_bypass_rls', true) = 'true'
-                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
-                );
-
-            ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
-            ALTER TABLE activities FORCE ROW LEVEL SECURITY;
-            DROP POLICY IF EXISTS activities_tenant_isolation ON activities;
-            CREATE POLICY activities_tenant_isolation ON activities
-                FOR ALL
-                USING (
-                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
-                    OR current_setting('app.system_bypass_rls', true) = 'true'
-                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
-                )
-                WITH CHECK (
-                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
-                    OR current_setting('app.system_bypass_rls', true) = 'true'
-                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
-                );
-
             CREATE TABLE IF NOT EXISTS system_maintenance_auth (
                 id int PRIMARY KEY,
                 token_hash text NOT NULL,
@@ -117,8 +87,132 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             );
             REVOKE ALL ON system_maintenance_audit_trail FROM PUBLIC;
             REVOKE ALL ON system_maintenance_audit_trail FROM farmflow_app;
+
+            CREATE OR REPLACE FUNCTION verify_system_maintenance_token(p_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            DECLARE
+                v_actual_hash text;
+                v_input_hash text;
+            BEGIN
+                IF p_token IS NULL OR trim(p_token) = '' THEN
+                    RETURN false;
+                END IF;
+                SELECT token_hash INTO v_actual_hash
+                FROM system_maintenance_auth
+                WHERE id = 1;
+                IF NOT FOUND THEN
+                    RETURN false;
+                END IF;
+                v_input_hash := encode(sha256(p_token::bytea), 'hex');
+                RETURN v_actual_hash = v_input_hash;
+            END;
+            $$;
+            REVOKE ALL ON FUNCTION verify_system_maintenance_token(text) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION verify_system_maintenance_token(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION rotate_system_maintenance_token(p_new_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                IF p_new_token IS NULL OR length(trim(p_new_token)) < 32 THEN
+                    RAISE EXCEPTION 'New maintenance token must be at least 32 characters long';
+                END IF;
+                IF p_new_token = 'farmflow-internal-system-maintenance-token-v1' THEN
+                    RAISE EXCEPTION 'Cannot use default development token in rotation';
+                END IF;
+                UPDATE system_maintenance_auth
+                SET token_hash = encode(sha256(p_new_token::bytea), 'hex'), updated_at = now()
+                WHERE id = 1;
+                IF NOT FOUND THEN
+                    INSERT INTO system_maintenance_auth (id, token_hash, updated_at)
+                    VALUES (1, encode(sha256(p_new_token::bytea), 'hex'), now());
+                END IF;
+                RETURN true;
+            END;
+            $$;
+            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM PUBLIC;
+            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM farmflow_app;
+
+            CREATE OR REPLACE FUNCTION enable_system_maintenance_context(p_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            DECLARE
+                v_valid boolean;
+            BEGIN
+                v_valid := verify_system_maintenance_token(p_token);
+                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
+                VALUES ('ELEVATE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), v_valid);
+
+                IF v_valid THEN
+                    PERFORM set_config('app.system_maintenance_token', p_token, true);
+                    RETURN true;
+                ELSE
+                    RAISE EXCEPTION 'Cryptographic token validation failed for system maintenance context';
+                END IF;
+            END;
+            $$;
+            REVOKE ALL ON FUNCTION enable_system_maintenance_context(text) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION enable_system_maintenance_context(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION disable_system_maintenance_context()
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                PERFORM set_config('app.system_maintenance_token', '', true);
+                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
+                VALUES ('DISABLE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), true);
+                RETURN true;
+            END;
+            $$;
+            REVOKE ALL ON FUNCTION disable_system_maintenance_context() FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION disable_system_maintenance_context() TO farmflow_app;
         """);
 
+        // 3. Row Level Security policies on core domain tables
+        jdbcTemplate.execute("""
+            ALTER TABLE plantations ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE plantations FORCE ROW LEVEL SECURITY;
+            DROP POLICY IF EXISTS plantations_tenant_isolation ON plantations;
+            CREATE POLICY plantations_tenant_isolation ON plantations
+                FOR ALL
+                USING (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR verify_system_maintenance_token(current_setting('app.system_maintenance_token', true)) = true
+                )
+                WITH CHECK (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR verify_system_maintenance_token(current_setting('app.system_maintenance_token', true)) = true
+                );
+
+            ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+            DROP POLICY IF EXISTS activities_tenant_isolation ON activities;
+            CREATE POLICY activities_tenant_isolation ON activities
+                FOR ALL
+                USING (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR verify_system_maintenance_token(current_setting('app.system_maintenance_token', true)) = true
+                )
+                WITH CHECK (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR verify_system_maintenance_token(current_setting('app.system_maintenance_token', true)) = true
+                );
+        """);
+
+        // 4. Partitioned telemetry tables, RLS enforcement, and child policies
         jdbcTemplate.execute("""
             DO $$
             BEGIN
@@ -171,61 +265,23 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                     FOR ALL
                     USING (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''))
                     WITH CHECK (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''));
+
+                DROP POLICY IF EXISTS telemetry_2026_10_tenant_isolation ON telemetry_readings_2026_10;
+                CREATE POLICY telemetry_2026_10_tenant_isolation ON telemetry_readings_2026_10
+                    FOR ALL
+                    USING (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''))
+                    WITH CHECK (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''));
+
+                DROP POLICY IF EXISTS telemetry_default_tenant_isolation ON telemetry_readings_default;
+                CREATE POLICY telemetry_default_tenant_isolation ON telemetry_readings_default
+                    FOR ALL
+                    USING (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''))
+                    WITH CHECK (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''));
             END $$;
         """);
 
+        // 5. Partition lifecycle management functions
         jdbcTemplate.execute("""
-            CREATE OR REPLACE FUNCTION verify_system_maintenance_token(p_token text)
-            RETURNS boolean
-            LANGUAGE plpgsql
-            SECURITY DEFINER
-            SET search_path = public, pg_temp
-            AS $$
-            DECLARE
-                v_actual_hash text;
-                v_input_hash text;
-            BEGIN
-                IF p_token IS NULL OR trim(p_token) = '' THEN
-                    RETURN false;
-                END IF;
-                SELECT token_hash INTO v_actual_hash
-                FROM system_maintenance_auth
-                WHERE id = 1;
-                IF NOT FOUND THEN
-                    RETURN false;
-                END IF;
-                v_input_hash := encode(sha256(p_token::bytea), 'hex');
-                RETURN v_actual_hash = v_input_hash;
-            END;
-            $$;
-            GRANT EXECUTE ON FUNCTION verify_system_maintenance_token(text) TO farmflow_app;
-
-            CREATE OR REPLACE FUNCTION rotate_system_maintenance_token(p_new_token text)
-            RETURNS boolean
-            LANGUAGE plpgsql
-            SECURITY DEFINER
-            SET search_path = public, pg_temp
-            AS $$
-            BEGIN
-                IF p_new_token IS NULL OR length(trim(p_new_token)) < 32 THEN
-                    RAISE EXCEPTION 'New maintenance token must be at least 32 characters long';
-                END IF;
-                IF p_new_token = 'farmflow-internal-system-maintenance-token-v1' THEN
-                    RAISE EXCEPTION 'Cannot use default development token in rotation';
-                END IF;
-                UPDATE system_maintenance_auth
-                SET token_hash = encode(sha256(p_new_token::bytea), 'hex'), updated_at = now()
-                WHERE id = 1;
-                IF NOT FOUND THEN
-                    INSERT INTO system_maintenance_auth (id, token_hash, updated_at)
-                    VALUES (1, encode(sha256(p_new_token::bytea), 'hex'), now());
-                END IF;
-                RETURN true;
-            END;
-            $$;
-            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM PUBLIC;
-            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM farmflow_app;
-
             CREATE OR REPLACE FUNCTION create_telemetry_partition(p_name text, p_start timestamptz, p_end timestamptz)
             RETURNS boolean
             LANGUAGE plpgsql
@@ -239,10 +295,12 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', p_name);
                     EXECUTE format('REVOKE ALL ON %I FROM PUBLIC, farmflow_app', p_name);
                     EXECUTE format('GRANT INSERT ON %I TO farmflow_app', p_name);
+                    EXECUTE format('CREATE POLICY %I_tenant_isolation ON %I FOR ALL USING (farm_id = NULLIF(current_setting(''app.current_farm_id'', true), '''')) WITH CHECK (farm_id = NULLIF(current_setting(''app.current_farm_id'', true), ''''))', p_name, p_name);
                 END IF;
                 RETURN true;
             END;
             $$;
+            REVOKE ALL ON FUNCTION create_telemetry_partition(text, timestamptz, timestamptz) FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION create_telemetry_partition(text, timestamptz, timestamptz) TO farmflow_app;
 
             CREATE OR REPLACE FUNCTION detach_telemetry_partition(p_name text)
@@ -263,6 +321,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 RETURN false;
             END;
             $$;
+            REVOKE ALL ON FUNCTION detach_telemetry_partition(text) FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION detach_telemetry_partition(text) TO farmflow_app;
 
             CREATE OR REPLACE FUNCTION get_telemetry_default_partition_row_count()
@@ -280,6 +339,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 RETURN v_count;
             END;
             $$;
+            REVOKE ALL ON FUNCTION get_telemetry_default_partition_row_count() FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION get_telemetry_default_partition_row_count() TO farmflow_app;
 
             CREATE OR REPLACE FUNCTION archive_and_drop_telemetry_partition(p_name text)
@@ -296,45 +356,8 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
                 RETURN false;
             END;
             $$;
+            REVOKE ALL ON FUNCTION archive_and_drop_telemetry_partition(text) FROM PUBLIC;
             GRANT EXECUTE ON FUNCTION archive_and_drop_telemetry_partition(text) TO farmflow_app;
-
-            CREATE OR REPLACE FUNCTION enable_system_maintenance_context(p_token text)
-            RETURNS boolean
-            LANGUAGE plpgsql
-            SECURITY DEFINER
-            SET search_path = public, pg_temp
-            AS $$
-            DECLARE
-                v_valid boolean;
-            BEGIN
-                v_valid := verify_system_maintenance_token(p_token);
-                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
-                VALUES ('ELEVATE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), v_valid);
-
-                IF v_valid THEN
-                    PERFORM set_config('app.system_maintenance_token', p_token, true);
-                    RETURN true;
-                ELSE
-                    RAISE EXCEPTION 'Cryptographic token validation failed for system maintenance context';
-                END IF;
-            END;
-            $$;
-            GRANT EXECUTE ON FUNCTION enable_system_maintenance_context(text) TO farmflow_app;
-
-            CREATE OR REPLACE FUNCTION disable_system_maintenance_context()
-            RETURNS boolean
-            LANGUAGE plpgsql
-            SECURITY DEFINER
-            SET search_path = public, pg_temp
-            AS $$
-            BEGIN
-                PERFORM set_config('app.system_maintenance_token', '', true);
-                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
-                VALUES ('DISABLE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), true);
-                RETURN true;
-            END;
-            $$;
-            GRANT EXECUTE ON FUNCTION disable_system_maintenance_context() TO farmflow_app;
         """);
     }
 
@@ -547,7 +570,7 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
             setTenantSession(tenantA);
             jdbcTemplate.update("""
                 INSERT INTO activities (id, created_at, updated_at, version, plantation_id, farm_id, title, type, date, priority, status, completed)
-                VALUES (?, NOW(), NOW(), 0, ?, ?, 'Atividade Valid Token', 'PLANTING', 'HIGH', 'IN_PROGRESS', false)
+                VALUES (?, NOW(), NOW(), 0, ?, ?, 'Atividade Valid Token', 'PLANTING', '2026-10-28', 'HIGH', 'IN_PROGRESS', false)
             """, UUID.randomUUID().toString(), UUID.randomUUID().toString(), tenantA);
             return null;
         });
