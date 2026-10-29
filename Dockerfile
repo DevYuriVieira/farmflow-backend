@@ -2,7 +2,7 @@ FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 COPY mvnw mvnw.cmd pom.xml ./
 COPY .mvn .mvn
-RUN ./mvnw dependency:go-offline
+RUN chmod +x mvnw
 COPY src src
 RUN ./mvnw clean package -DskipTests
 
@@ -15,7 +15,7 @@ COPY --from=builder --chown=farmflow:farmflow /app/target/*.jar app.jar
 
 USER farmflow:farmflow
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=30s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/v1/health/live || exit 1
 
 EXPOSE 8080

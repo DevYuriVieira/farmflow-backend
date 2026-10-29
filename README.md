@@ -15,6 +15,7 @@
 [![Flyway](https://img.shields.io/badge/Flyway-V1--V21%20Hardened-CC0202?logo=flyway&logoColor=white)](#7-postgresql-17--persistence)
 [![Trivy Scan](https://img.shields.io/badge/Trivy%20Scan-Passed%20(Zero%20CVEs)-brightgreen?logo=aquasec&logoColor=white)](#23-automated-testing-strategy)
 [![CI Pipeline](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/ci.yml)
+[![CD Pipeline](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/cd.yml/badge.svg)](https://github.com/DevYuriVieira/farmflow-backend/actions/workflows/cd.yml)
 
 **Enterprise Agro-Industrial Management, Precision Telemetry & Distributed Saga Engine**  
 *A distributed, event-driven agro-industrial REST API engineered for multi-tenant isolation, transactional consistency, IoT time-series scalability, and asynchronous saga orchestration.*
