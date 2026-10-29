@@ -87,18 +87,11 @@ jobs:
       - name: Configure Docker Socket Permissions
         run: sudo chmod 666 /var/run/docker.sock || true
 
-      - name: Provision Least-Privilege Application Role (PostgreSQL)
-        run: |
-          docker exec $(docker ps -q -f "ancestor=postgres:17-alpine" | head -n 1) psql -U postgres -d farmflow -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'farmflow_app') THEN CREATE ROLE farmflow_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'farmflow'; END IF; GRANT USAGE ON SCHEMA public TO farmflow_app; END \$\$;"
-
       - name: Run Automated Test Suites
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/farmflow
-          SPRING_DATASOURCE_USERNAME: farmflow_app
-          SPRING_DATASOURCE_PASSWORD: farmflow
-          SPRING_FLYWAY_USER: postgres
-          SPRING_FLYWAY_PASSWORD: postgres
-          SPRING_FLYWAY_ENABLED: "true"
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
           SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
           SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_RABBITMQ_HOST: 127.0.0.1
