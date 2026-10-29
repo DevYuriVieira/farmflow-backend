@@ -92,6 +92,10 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/farmflow
           SPRING_DATASOURCE_USERNAME: postgres
           SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_FLYWAY_ENABLED: "true"
+          SPRING_FLYWAY_USER: postgres
+          SPRING_FLYWAY_PASSWORD: postgres
+          SPRING_JPA_HIBERNATE_DDL_AUTO: update
           SPRING_DATASOURCE_DRIVER: org.postgresql.Driver
           SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
           SPRING_RABBITMQ_HOST: 127.0.0.1

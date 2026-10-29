@@ -61,6 +61,12 @@ public class DistributedTracingPropagationIntegrationTest extends AbstractIntegr
     @Autowired
     private PlatformTransactionManager transactionManager;
 
+    @org.junit.jupiter.api.BeforeEach
+    void cleanOutboxState() {
+        outboxRepository.deleteAll();
+        reset(rabbitMqEventPublisher);
+    }
+
     @Test
     @DisplayName("Tracing W3C: Outbox e Publisher preservam e propagam traceparent através da mensageria")
     void shouldPersistAndPropagateW3CTraceParentAcrossOutboxAndPublisher() {
