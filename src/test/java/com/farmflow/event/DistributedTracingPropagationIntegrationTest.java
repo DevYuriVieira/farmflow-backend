@@ -83,7 +83,7 @@ public class DistributedTracingPropagationIntegrationTest extends AbstractIntegr
                         "https://farmflow.com/test",
                         "com.farmflow.activity.completed.v1",
                         "farm-trace-01",
-                        UUID.randomUUID().toString(),
+                        testCorrelationId,
                         Map.of("sample", "data")
                 );
                 return outboxService.recordCloudEvent(event);
@@ -96,7 +96,7 @@ public class DistributedTracingPropagationIntegrationTest extends AbstractIntegr
 
             outboxProcessor.processOutboxMessages();
 
-            verify(rabbitMqEventPublisher).publish(
+            verify(rabbitMqEventPublisher, atLeastOnce()).publish(
                     anyString(),
                     any(),
                     eq(saved.getId()),

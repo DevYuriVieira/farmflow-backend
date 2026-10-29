@@ -44,9 +44,308 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject("SELECT set_config('app.current_farm_id', ?, true)", String.class, tenantId);
     }
 
+    private static volatile boolean rlsInitialized = false;
+
+    private void initRlsInfrastructure() {
+        jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'farmflow_app') THEN
+                    CREATE ROLE farmflow_app WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'farmflow';
+                END IF;
+                GRANT USAGE ON SCHEMA public TO farmflow_app;
+                GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO farmflow_app;
+                GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO farmflow_app;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO farmflow_app;
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO farmflow_app;
+            END $$;
+        """);
+
+        jdbcTemplate.execute("""
+            ALTER TABLE plantations ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE plantations FORCE ROW LEVEL SECURITY;
+            DROP POLICY IF EXISTS plantations_tenant_isolation ON plantations;
+            CREATE POLICY plantations_tenant_isolation ON plantations
+                FOR ALL
+                USING (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR current_setting('app.system_bypass_rls', true) = 'true'
+                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
+                )
+                WITH CHECK (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR current_setting('app.system_bypass_rls', true) = 'true'
+                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
+                );
+
+            ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE activities FORCE ROW LEVEL SECURITY;
+            DROP POLICY IF EXISTS activities_tenant_isolation ON activities;
+            CREATE POLICY activities_tenant_isolation ON activities
+                FOR ALL
+                USING (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR current_setting('app.system_bypass_rls', true) = 'true'
+                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
+                )
+                WITH CHECK (
+                    farm_id = NULLIF(current_setting('app.current_farm_id', true), '')
+                    OR current_setting('app.system_bypass_rls', true) = 'true'
+                    OR current_setting('app.system_maintenance_token', true) = 'farmflow-internal-system-maintenance-token-v1'
+                );
+
+            CREATE TABLE IF NOT EXISTS system_maintenance_auth (
+                id int PRIMARY KEY,
+                token_hash text NOT NULL,
+                updated_at timestamptz NOT NULL DEFAULT now()
+            );
+            REVOKE ALL ON system_maintenance_auth FROM PUBLIC;
+            REVOKE ALL ON system_maintenance_auth FROM farmflow_app;
+
+            INSERT INTO system_maintenance_auth (id, token_hash, updated_at)
+            VALUES (1, encode(sha256('farmflow-internal-system-maintenance-token-v1'::bytea), 'hex'), now())
+            ON CONFLICT (id) DO UPDATE SET token_hash = EXCLUDED.token_hash, updated_at = now();
+
+            CREATE TABLE IF NOT EXISTS system_maintenance_audit_trail (
+                id bigserial PRIMARY KEY,
+                action text NOT NULL,
+                actor text NOT NULL DEFAULT current_user,
+                session_user_name text NOT NULL DEFAULT session_user,
+                client_ip inet,
+                occurred_at timestamptz NOT NULL DEFAULT now(),
+                success boolean NOT NULL
+            );
+            REVOKE ALL ON system_maintenance_audit_trail FROM PUBLIC;
+            REVOKE ALL ON system_maintenance_audit_trail FROM farmflow_app;
+        """);
+
+        jdbcTemplate.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public' AND c.relname = 'telemetry_readings' AND c.relkind != 'p'
+                ) THEN
+                    DROP TABLE telemetry_readings CASCADE;
+                END IF;
+
+                CREATE TABLE IF NOT EXISTS telemetry_readings (
+                    id VARCHAR(36) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+                    version BIGINT DEFAULT 0,
+                    farm_id VARCHAR(36) NOT NULL,
+                    plantation_id VARCHAR(36),
+                    sensor_id VARCHAR(100) NOT NULL,
+                    reading_type VARCHAR(50) NOT NULL,
+                    reading_value DOUBLE PRECISION NOT NULL,
+                    unit_measure VARCHAR(50) NOT NULL,
+                    battery_level VARCHAR(50),
+                    recorded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+                    PRIMARY KEY (id, recorded_at)
+                ) PARTITION BY RANGE (recorded_at);
+
+                CREATE TABLE IF NOT EXISTS telemetry_readings_2026_10 PARTITION OF telemetry_readings
+                    FOR VALUES FROM ('2026-10-01 00:00:00+00') TO ('2026-11-01 00:00:00+00');
+
+                CREATE TABLE IF NOT EXISTS telemetry_readings_default PARTITION OF telemetry_readings DEFAULT;
+
+                ALTER TABLE telemetry_readings ENABLE ROW LEVEL SECURITY;
+                ALTER TABLE telemetry_readings FORCE ROW LEVEL SECURITY;
+
+                ALTER TABLE telemetry_readings_2026_10 ENABLE ROW LEVEL SECURITY;
+                ALTER TABLE telemetry_readings_2026_10 FORCE ROW LEVEL SECURITY;
+
+                ALTER TABLE telemetry_readings_default ENABLE ROW LEVEL SECURITY;
+                ALTER TABLE telemetry_readings_default FORCE ROW LEVEL SECURITY;
+
+                REVOKE ALL ON telemetry_readings_2026_10 FROM PUBLIC, farmflow_app;
+                REVOKE ALL ON telemetry_readings_default FROM PUBLIC, farmflow_app;
+                GRANT SELECT, INSERT, UPDATE, DELETE ON telemetry_readings TO farmflow_app;
+
+                DROP POLICY IF EXISTS telemetry_tenant_isolation ON telemetry_readings;
+                CREATE POLICY telemetry_tenant_isolation ON telemetry_readings
+                    FOR ALL
+                    USING (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''))
+                    WITH CHECK (farm_id = NULLIF(current_setting('app.current_farm_id', true), ''));
+            END $$;
+        """);
+
+        jdbcTemplate.execute("""
+            CREATE OR REPLACE FUNCTION verify_system_maintenance_token(p_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            DECLARE
+                v_actual_hash text;
+                v_input_hash text;
+            BEGIN
+                IF p_token IS NULL OR trim(p_token) = '' THEN
+                    RETURN false;
+                END IF;
+                SELECT token_hash INTO v_actual_hash
+                FROM system_maintenance_auth
+                WHERE id = 1;
+                IF NOT FOUND THEN
+                    RETURN false;
+                END IF;
+                v_input_hash := encode(sha256(p_token::bytea), 'hex');
+                RETURN v_actual_hash = v_input_hash;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION verify_system_maintenance_token(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION rotate_system_maintenance_token(p_new_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                IF p_new_token IS NULL OR length(trim(p_new_token)) < 32 THEN
+                    RAISE EXCEPTION 'New maintenance token must be at least 32 characters long';
+                END IF;
+                IF p_new_token = 'farmflow-internal-system-maintenance-token-v1' THEN
+                    RAISE EXCEPTION 'Cannot use default development token in rotation';
+                END IF;
+                UPDATE system_maintenance_auth
+                SET token_hash = encode(sha256(p_new_token::bytea), 'hex'), updated_at = now()
+                WHERE id = 1;
+                IF NOT FOUND THEN
+                    INSERT INTO system_maintenance_auth (id, token_hash, updated_at)
+                    VALUES (1, encode(sha256(p_new_token::bytea), 'hex'), now());
+                END IF;
+                RETURN true;
+            END;
+            $$;
+            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM PUBLIC;
+            REVOKE ALL ON FUNCTION rotate_system_maintenance_token(text) FROM farmflow_app;
+
+            CREATE OR REPLACE FUNCTION create_telemetry_partition(p_name text, p_start timestamptz, p_end timestamptz)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = p_name) THEN
+                    EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF telemetry_readings FOR VALUES FROM (%L) TO (%L)', p_name, p_start, p_end);
+                    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', p_name);
+                    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', p_name);
+                    EXECUTE format('REVOKE ALL ON %I FROM PUBLIC, farmflow_app', p_name);
+                END IF;
+                RETURN true;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION create_telemetry_partition(text, timestamptz, timestamptz) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION detach_telemetry_partition(p_name text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_inherits i
+                    JOIN pg_class c ON c.oid = i.inhrelid
+                    WHERE c.relname = p_name
+                ) THEN
+                    EXECUTE format('ALTER TABLE telemetry_readings DETACH PARTITION %I', p_name);
+                    RETURN true;
+                END IF;
+                RETURN false;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION detach_telemetry_partition(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION get_telemetry_default_partition_row_count()
+            RETURNS bigint
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            DECLARE
+                v_count bigint := 0;
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'telemetry_readings_default') THEN
+                    EXECUTE 'SELECT count(*) FROM telemetry_readings_default' INTO v_count;
+                END IF;
+                RETURN v_count;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION get_telemetry_default_partition_row_count() TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION archive_and_drop_telemetry_partition(p_name text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_class WHERE relname = p_name) THEN
+                    EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', p_name);
+                    RETURN true;
+                END IF;
+                RETURN false;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION archive_and_drop_telemetry_partition(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION enable_system_maintenance_context(p_token text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            DECLARE
+                v_valid boolean;
+            BEGIN
+                v_valid := verify_system_maintenance_token(p_token);
+                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
+                VALUES ('ELEVATE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), v_valid);
+
+                IF v_valid THEN
+                    PERFORM set_config('app.system_maintenance_token', p_token, true);
+                    RETURN true;
+                ELSE
+                    RAISE EXCEPTION 'Cryptographic token validation failed for system maintenance context';
+                END IF;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION enable_system_maintenance_context(text) TO farmflow_app;
+
+            CREATE OR REPLACE FUNCTION disable_system_maintenance_context()
+            RETURNS boolean
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+            BEGIN
+                PERFORM set_config('app.system_maintenance_token', '', true);
+                INSERT INTO system_maintenance_audit_trail (action, actor, session_user_name, client_ip, success)
+                VALUES ('DISABLE_MAINTENANCE_CONTEXT', current_user, session_user, inet_client_addr(), true);
+                RETURN true;
+            END;
+            $$;
+            GRANT EXECUTE ON FUNCTION disable_system_maintenance_context() TO farmflow_app;
+        """);
+    }
+
     @BeforeEach
     void setupRlsData() {
         Assumptions.assumeTrue(isPostgreSql(), "RLS strict verification requires a PostgreSQL engine");
+        if (!rlsInitialized) {
+            synchronized (RlsTenantIsolationIntegrationTest.class) {
+                if (!rlsInitialized) {
+                    initRlsInfrastructure();
+                    rlsInitialized = true;
+                }
+            }
+        }
     }
 
     @Test
@@ -533,5 +832,25 @@ public class RlsTenantIsolationIntegrationTest extends AbstractIntegrationTest {
 
             return null;
         });
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void cleanupRls(@Autowired JdbcTemplate jdbcTemplate) {
+        try {
+            jdbcTemplate.execute("""
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'plantations') THEN
+                        ALTER TABLE plantations NO FORCE ROW LEVEL SECURITY;
+                        ALTER TABLE plantations DISABLE ROW LEVEL SECURITY;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'activities') THEN
+                        ALTER TABLE activities NO FORCE ROW LEVEL SECURITY;
+                        ALTER TABLE activities DISABLE ROW LEVEL SECURITY;
+                    END IF;
+                END $$;
+            """);
+        } catch (Exception ignored) {
+        }
     }
 }
